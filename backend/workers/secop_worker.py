@@ -104,7 +104,7 @@ async def process_contract(session, url_contratos, url_procesos, params_contrato
     except Exception as e:
         await log_queue.put({"type": "error", "message": f"[ERROR] Excepción con {valor}: {str(e)}"})
 
-async def run_secop_extraction(job_id: str, config_data: dict, log_queue: asyncio.Queue, file_bytes: bytes):
+async def run_secop_extraction(job_id: str, config_data: dict, log_queue: asyncio.Queue, file_bytes: bytes, active_cancellations: set):
     db = SessionLocal()
     try:
         await log_queue.put({"type": "log", "message": "[INFO] Iniciando extracción masiva asíncrona hacia SQLite...", "progress": 5})
@@ -211,6 +211,16 @@ async def run_secop_extraction(job_id: str, config_data: dict, log_queue: asynci
         
         await log_queue.put({"type": "log", "message": "[OK] ¡Metadatos extraídos! El Dashboard ya puede visualizarse.", "progress": 90})
         
+        if job_id in active_cancellations:
+            raise asyncio.CancelledError("Cancelado por el usuario tras la extracción de metadatos.")
+
+        # Verificar si el usuario eligió saltar el Scraper
+        run_scraper = config_data.get('runScraper', True)
+        if not run_scraper:
+            await log_queue.put({"type": "log", "message": "[AVISO] Extracción profunda (Scraper + OCR) omitida por el usuario. Finalizando análisis rápido.", "progress": 100})
+            await log_queue.put({"type": "complete"})
+            return
+        
         # 6. Scraper Real (Background Físico)
         from services.pdf_scraper import download_pdfs_for_contract
         
@@ -223,8 +233,14 @@ async def run_secop_extraction(job_id: str, config_data: dict, log_queue: asynci
             search_term = config_data.get("ocrSearchTerm", "").strip()
             
             for c in contratos_con_url:
+                if job_id in active_cancellations:
+                    raise asyncio.CancelledError("Cancelado por el usuario antes de descargar un nuevo contrato.")
+                    
                 # Disparar scraping asíncrono para descargar anexos PDF reales
-                await download_pdfs_for_contract(job_id, c.llave_busqueda, c.datos_secop.get("urlproceso"), log_queue)
+                await download_pdfs_for_contract(job_id, c.llave_busqueda, c.datos_secop.get("urlproceso"), log_queue, active_cancellations=active_cancellations)
+                
+                if job_id in active_cancellations:
+                    raise asyncio.CancelledError("Cancelado por el usuario antes del OCR.")
                 
                 # Inyección OCR
                 if search_term:
@@ -258,6 +274,8 @@ async def run_secop_extraction(job_id: str, config_data: dict, log_queue: asynci
         await log_queue.put({"type": "log", "message": "[OK] Proceso de Auditoría Masiva 100% Completo.", "progress": 100})
         await log_queue.put({"type": "complete"})
         
+    except asyncio.CancelledError:
+        await log_queue.put({"type": "error", "message": "[CANCELADO] El proceso fue abortado por el usuario de forma segura."})
     except Exception as e:
         db.rollback()
         await log_queue.put({"type": "error", "message": f"[ERROR] Fallo crítico en el worker: {str(e)}"})

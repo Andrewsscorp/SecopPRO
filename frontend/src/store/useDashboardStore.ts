@@ -49,11 +49,24 @@ interface DashboardState {
   };
   toggleColumn: (key: keyof DashboardState['selectedColumns']) => void;
   toggleAllColumns: (value: boolean) => void;
+  // Minimization & Progress State
+  isMinimized: boolean;
+  currentPdf: number;
+  totalPdfs: number;
+  toggleMinimize: () => void;
+  setPdfProgress: (current: number, total: number) => void;
 }
 
 export const useDashboardStore = create<DashboardState>((set) => ({
   globalSearch: '',
   setGlobalSearch: (term) => set({ globalSearch: term }),
+  
+  // Minimization & Progress Initial State
+  isMinimized: false,
+  currentPdf: 0,
+  totalPdfs: 0,
+  toggleMinimize: () => set((state) => ({ isMinimized: !state.isMinimized })),
+  setPdfProgress: (current, total) => set({ currentPdf: current, totalPdfs: total }),
   
   stats: {
     procesosAnalizados: 0,

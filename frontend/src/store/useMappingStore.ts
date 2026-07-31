@@ -23,6 +23,7 @@ interface MappingState {
   analysisConfig: {
     name: string;
     cutOffDate: string;
+    runScraper: boolean;
   };
   setMappedColumns: (columns: MappedColumn[]) => void;
   updateColumnMapping: (excelCol: string, secopField: string | null) => void;
@@ -31,7 +32,7 @@ interface MappingState {
   toggleConfig: (key: keyof MappingState['configToggles']) => void;
   toggleAllConfig: (value: boolean) => void;
   setOcrSearchTerm: (term: string) => void;
-  setAnalysisConfig: (name: string, date: string) => void;
+  setAnalysisConfig: (name: string, date: string, runScraper?: boolean) => void;
   getApiPayload: () => any;
 }
 
@@ -51,6 +52,7 @@ export const useMappingStore = create<MappingState>((set, get) => ({
   analysisConfig: {
     name: '',
     cutOffDate: '',
+    runScraper: true,
   },
   setMappedColumns: (columns) => set({ mappedColumns: columns }),
   updateColumnMapping: (excelCol, secopField) => set((state) => {
@@ -99,14 +101,15 @@ export const useMappingStore = create<MappingState>((set, get) => ({
     }
   })),
   setOcrSearchTerm: (term) => set({ ocrSearchTerm: term }),
-  setAnalysisConfig: (name, cutOffDate) => set({ analysisConfig: { name, cutOffDate } }),
+  setAnalysisConfig: (name, cutOffDate, runScraper = true) => set({ analysisConfig: { name, cutOffDate, runScraper } }),
   getApiPayload: () => {
     const state = get();
     return {
       mappedColumns: state.mappedColumns,
       configToggles: state.configToggles,
       analysisConfig: state.analysisConfig,
-      ocrSearchTerm: state.ocrSearchTerm
+      ocrSearchTerm: state.ocrSearchTerm,
+      runScraper: state.analysisConfig.runScraper // Pasarlo a nivel raíz para que FastAPI lo vea fácil
     };
   }
 }));

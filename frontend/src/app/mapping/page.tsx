@@ -24,8 +24,8 @@ export default function MappingPage() {
     setMounted(true);
   }, []);
 
-  const handleStartAnalysis = async (name: string, date: string) => {
-    setAnalysisConfig(name, date);
+  const handleStartAnalysis = async (name: string, date: string, runScraper: boolean) => {
+    setAnalysisConfig(name, date, runScraper);
     
     if (!file) {
       toast.error('No hay archivo seleccionado');

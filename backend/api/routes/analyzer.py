@@ -14,6 +14,13 @@ router = APIRouter()
 
 # Diccionario global en memoria para guardar las colas de cada job_id
 active_queues = {}
+# Set global para registrar trabajos cancelados por el usuario
+active_cancellations = set()
+
+@router.post("/cancel/{job_id}")
+def cancel_analysis(job_id: str):
+    active_cancellations.add(job_id)
+    return {"message": "Señal de cancelación enviada al motor."}
 
 @router.post("/start", response_model=StartAnalysisResponse)
 async def start_analysis(
@@ -36,13 +43,17 @@ async def start_analysis(
     # Limpiar caracteres inválidos para carpetas y URLs
     job_id = re.sub(r'[\\/*?:"<>|]', '_', raw_name).replace(' ', '_')
     
+    # Asegurar que el job_id no esté en cancelaciones previas
+    if job_id in active_cancellations:
+        active_cancellations.remove(job_id)
+    
     # Crear una cola única para este trabajo
     active_queues[job_id] = asyncio.Queue()
     
     file_bytes = await file.read()
     
-    # Despachar la tarea al Event Loop de FastAPI
-    background_tasks.add_task(run_secop_extraction, job_id, config_data, active_queues[job_id], file_bytes)
+    # Despachar la tarea al Event Loop de FastAPI, pasando active_cancellations
+    background_tasks.add_task(run_secop_extraction, job_id, config_data, active_queues[job_id], file_bytes, active_cancellations)
     
     return {"job_id": job_id, "message": "Análisis iniciado en segundo plano"}
 

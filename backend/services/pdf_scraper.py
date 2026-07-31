@@ -22,7 +22,7 @@ async def authenticate_human_in_the_loop(urlproceso: str, log_queue: asyncio.Que
     pass # Reescrito abajo
 
 # Función síncrona que correrá en el thread
-def run_playwright_isolated(job_id, llave, urlproceso_limpia, raw_dir, zip_path, max_retries, state_file, main_loop, log_queue):
+def run_playwright_isolated(job_id, llave, urlproceso_limpia, raw_dir, zip_path, max_retries, state_file, main_loop, log_queue, active_cancellations):
     # Forzar el uso del ProactorEventLoop en este hilo (Obligatorio en Windows)
     if sys.platform == 'win32':
         asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
@@ -109,16 +109,36 @@ def run_playwright_isolated(job_id, llave, urlproceso_limpia, raw_dir, zip_path,
                         send_log("log", f"[SCRAPER] 📁 ¡Se encontraron {total_links} documentos con el selector principal!")
                         for i in range(total_links):
                             try:
+                                if job_id in active_cancellations:
+                                    raise asyncio.CancelledError("Interrumpido por el usuario en medio de la descarga.")
+                                
                                 # Retardo aleatorio para evadir Rate-Limiting de SECOP
                                 delay = random.uniform(2.0, 4.5)
                                 await asyncio.sleep(delay)
                                 
                                 send_log("log", f"[SCRAPER] ⬇️ Descargando documento {i+1} de {total_links} (delay {delay:.1f}s)...")
                                 link = locator_principal.nth(i)
-                                # Timeout a 90s, JS click
-                                async with page.expect_download(timeout=90000) as download_info:
-                                    await link.evaluate("el => el.click()")
-                                download = await download_info.value
+                                # Aumentamos timeout a 90s y aplicamos Evasión Avanzada (Extracción de URL)
+                                onclick_attr = await link.get_attribute("onclick") or ""
+                                extracted_url = None
+                                import re
+                                if "getAction" in onclick_attr:
+                                    parts = re.findall(r"'([^']+)'", onclick_attr)
+                                    if parts:
+                                        url_path = "".join(parts).replace("&amp;", "&")
+                                        if not url_path.startswith("http"):
+                                            extracted_url = "https://community.secop.gov.co" + url_path
+                                
+                                if extracted_url:
+                                    async with page.expect_download(timeout=90000) as download_info:
+                                        await page.evaluate(f"window.location.href = '{extracted_url}'")
+                                    download = await download_info.value
+                                else:
+                                    # Fallback al click forzado si no podemos extraer la URL
+                                    async with page.expect_download(timeout=90000) as download_info:
+                                        await link.evaluate("el => el.click()")
+                                    download = await download_info.value
+                                    
                                 safe_name = download.suggested_filename
                                 if '.' not in safe_name: safe_name += ".pdf"
                                 await download.save_as(raw_dir / safe_name)
@@ -161,9 +181,25 @@ def run_playwright_isolated(job_id, llave, urlproceso_limpia, raw_dir, zip_path,
                                 try:
                                     send_log("log", f"[SCRAPER] ⬇️ Descargando alternativo {i+1} de {total_fallbacks}...")
                                     link = fallback_links_locator.nth(idx)
-                                    async with page.expect_download(timeout=90000) as download_info:
-                                        await link.evaluate("el => el.click()")
-                                    download = await download_info.value
+                                    onclick_attr = await link.get_attribute("onclick") or ""
+                                    extracted_url = None
+                                    import re
+                                    if "getAction" in onclick_attr:
+                                        parts = re.findall(r"'([^']+)'", onclick_attr)
+                                        if parts:
+                                            url_path = "".join(parts).replace("&amp;", "&")
+                                            if not url_path.startswith("http"):
+                                                extracted_url = "https://community.secop.gov.co" + url_path
+                                    
+                                    if extracted_url:
+                                        async with page.expect_download(timeout=90000) as download_info:
+                                            await page.evaluate(f"window.location.href = '{extracted_url}'")
+                                        download = await download_info.value
+                                    else:
+                                        async with page.expect_download(timeout=90000) as download_info:
+                                            await link.evaluate("el => el.click()")
+                                        download = await download_info.value
+                                        
                                     safe_name = download.suggested_filename
                                     if '.' not in safe_name: safe_name += ".pdf"
                                     await download.save_as(raw_dir / safe_name)
@@ -179,11 +215,20 @@ def run_playwright_isolated(job_id, llave, urlproceso_limpia, raw_dir, zip_path,
                                 zf.write(raw_dir / file_name, arcname=file_name)
                         send_log("log", f"[SCRAPER OK] {pdf_count} anexos descargados en ZIP para '{llave}'.")
                     else:
+                        await page.screenshot(path="C:\\Users\\Hawk\\Documents\\SecopPRO_Consul\\debug_secop.png")
                         with zipfile.ZipFile(zip_path, 'w') as zf:
                             zf.writestr("alerta.txt", b"No se encontraron anexos fisicos descargables.")
-                        send_log("log", f"[SCRAPER AVISO] No se encontraron anexos en '{llave}'.")
+                        send_log("log", f"[SCRAPER AVISO] No se encontraron anexos en '{llave}'. (Screenshot guardado en SecopPRO_Consul\\debug_secop.png)")
                         
                     break # Salir del loop de reintentos
+            except asyncio.CancelledError as ce:
+                send_log("log", "[SCRAPER AVISO] Empaquetando los PDFs que se alcanzaron a descargar antes de cancelar...")
+                if pdf_count > 0:
+                    with zipfile.ZipFile(zip_path, 'w') as zf:
+                        for file_name in os.listdir(raw_dir):
+                            zf.write(raw_dir / file_name, arcname=file_name)
+                    send_log("log", f"[SCRAPER OK] {pdf_count} anexos rescatados en ZIP para '{llave}'.")
+                raise ce
             except Exception as e:
                 import traceback
                 error_details = traceback.format_exc()
@@ -201,7 +246,7 @@ def run_playwright_isolated(job_id, llave, urlproceso_limpia, raw_dir, zip_path,
         thread_loop.close()
 
 
-async def download_pdfs_for_contract(job_id: str, llave: str, urlproceso: str, log_queue: asyncio.Queue, max_retries: int = 3):
+async def download_pdfs_for_contract(job_id: str, llave: str, urlproceso: str, log_queue: asyncio.Queue, max_retries: int = 3, active_cancellations: set = None):
     """
     Controlador asíncrono para ejecutar el scraper aislado.
     Crea los directorios necesarios y lanza el hilo.
@@ -238,7 +283,7 @@ async def download_pdfs_for_contract(job_id: str, llave: str, urlproceso: str, l
         await main_loop.run_in_executor(
             executor, 
             run_playwright_isolated, 
-            job_id, llave, urlproceso_limpia, raw_dir, zip_path, max_retries, STATE_FILE, main_loop, log_queue
+            job_id, llave, urlproceso_limpia, raw_dir, zip_path, max_retries, STATE_FILE, main_loop, log_queue, active_cancellations or set()
         )
     
     if raw_dir.exists():
