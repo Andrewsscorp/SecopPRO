@@ -60,7 +60,7 @@ async def _intentar_descarga(link, page, raw_dir: pathlib.Path) -> str:
             await page.evaluate("""(url) => {
                 const a = document.createElement('a');
                 a.href = url;
-                a.target = '_blank'; // Previene re-navegación del main DOM
+                a.download = ''; // Forza la descarga sin abrir pestañas ni recargar el DOM
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
