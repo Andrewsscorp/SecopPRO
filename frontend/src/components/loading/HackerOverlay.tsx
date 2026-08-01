@@ -75,11 +75,20 @@ export default function HackerOverlay({ jobId, onComplete, onCancel }: HackerOve
   }, [jobId, setPdfProgress]);
 
   const handleCancel = async () => {
+    if (progress >= 100) {
+      onComplete();
+      return;
+    }
     if (!jobId) return;
     try {
       await fetch(`http://localhost:8000/api/cancel/${jobId}`, { method: 'POST' });
-      setLogs(prev => [...prev, '[SISTEMA] Enviando señal de aborto al motor...']);
-      if (onCancel) onCancel();
+      setLogs(prev => [...prev, '[SISTEMA] Enviando señal de aborto al motor (Cancelando vía SIGTERM PID)...']);
+      
+      // Esperar un instante para que el backend mate el proceso
+      setTimeout(() => {
+        if (onCancel) onCancel();
+        else onComplete();
+      }, 1000);
     } catch (e) {
       console.error("Error cancelando el trabajo", e);
     }

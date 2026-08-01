@@ -1,35 +1,58 @@
-from fastapi import APIRouter, UploadFile, File, Form, BackgroundTasks, HTTPException
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
 from fastapi.responses import StreamingResponse
 import asyncio
 import uuid
 import json
+import multiprocessing as mp
+import threading
 from api.schemas import StartAnalysisResponse
-from workers.secop_worker import run_secop_extraction
-from fastapi import Depends
+from workers.secop_worker import worker_process_entrypoint
 from sqlalchemy.orm import Session
 from database.database import get_db
 from database.models import Contrato
 
 router = APIRouter()
 
-# Diccionario global en memoria para guardar las colas de cada job_id
+# Diccionario global en memoria para guardar las colas asíncronas de cada job_id
 active_queues = {}
-# Set global para registrar trabajos cancelados por el usuario
-active_cancellations = set()
+# Diccionario global para mantener referencia a los subprocesos vivos
+active_processes = {}
 
 @router.post("/cancel/{job_id}")
 def cancel_analysis(job_id: str):
-    active_cancellations.add(job_id)
-    return {"message": "Señal de cancelación enviada al motor."}
+    if job_id in active_processes:
+        process = active_processes[job_id]
+        if process.is_alive():
+            process.terminate()
+            process.join(timeout=2)
+        
+        # Enviar señal artificial a la cola para desconectar clientes SSE
+        if job_id in active_queues:
+            loop = asyncio.get_event_loop()
+            asyncio.run_coroutine_threadsafe(
+                active_queues[job_id].put({"type": "error", "message": "[CANCELADO] El proceso fue asesinado por el usuario de forma segura (PID Killed)."}),
+                loop
+            )
+            
+    return {"message": "Señal SIGTERM enviada al PID del motor."}
+
+def process_queue_reader(mp_queue, async_queue, loop):
+    """Hilo puente que lee de la cola sincrónica del PID y empuja a la cola asyncio del SSE"""
+    while True:
+        try:
+            msg = mp_queue.get()
+            asyncio.run_coroutine_threadsafe(async_queue.put(msg), loop)
+            if msg.get("type") in ("complete", "error"):
+                break
+        except Exception:
+            break
 
 @router.post("/start", response_model=StartAnalysisResponse)
 async def start_analysis(
-    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     payload: str = Form(...)
 ):
     try:
-        # Parsear el JSON que viene como string en el FormData
         config_data = json.loads(payload)
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="El payload no es un JSON válido")
@@ -43,19 +66,22 @@ async def start_analysis(
     # Limpiar caracteres inválidos para carpetas y URLs
     job_id = re.sub(r'[\\/*?:"<>|]', '_', raw_name).replace(' ', '_')
     
-    # Asegurar que el job_id no esté en cancelaciones previas
-    if job_id in active_cancellations:
-        active_cancellations.remove(job_id)
-    
-    # Crear una cola única para este trabajo
     active_queues[job_id] = asyncio.Queue()
+    mp_queue = mp.Queue()
     
     file_bytes = await file.read()
     
-    # Despachar la tarea al Event Loop de FastAPI, pasando active_cancellations
-    background_tasks.add_task(run_secop_extraction, job_id, config_data, active_queues[job_id], file_bytes, active_cancellations)
+    # Despachar la tarea a un nuevo Proceso del SO (PID Aislado)
+    process = mp.Process(target=worker_process_entrypoint, args=(job_id, config_data, file_bytes, mp_queue))
+    process.start()
     
-    return {"job_id": job_id, "message": "Análisis iniciado en segundo plano"}
+    active_processes[job_id] = process
+    
+    # Iniciar el puente Thread -> Asyncio
+    loop = asyncio.get_running_loop()
+    threading.Thread(target=process_queue_reader, args=(mp_queue, active_queues[job_id], loop), daemon=True).start()
+    
+    return {"job_id": job_id, "message": f"Análisis iniciado en proceso PID: {process.pid}"}
 
 
 @router.get("/stream/{job_id}")

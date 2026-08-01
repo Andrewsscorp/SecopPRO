@@ -493,3 +493,31 @@ async def run_secop_extraction(
         await log_queue.put({"type": "error", "message": f"[ERROR] Fallo crítico en el worker: {str(e)}"})
     finally:
         db.close()
+
+
+def worker_process_entrypoint(job_id: str, config_data: dict, file_bytes: bytes, mp_queue):
+    """
+    Punto de entrada para ejecutar la extracción en un Proceso de Sistema aislado (PID).
+    """
+    import asyncio
+    
+    async def main():
+        log_queue = asyncio.Queue()
+        
+        async def forwarder():
+            while True:
+                msg = await log_queue.get()
+                mp_queue.put(msg)
+                if msg.get("type") in ("complete", "error"):
+                    break
+                    
+        asyncio.create_task(forwarder())
+        
+        # Usamos un set vacío de cancelaciones, porque la cancelación ahora es matar el PID (SIGTERM)
+        try:
+            await run_secop_extraction(job_id, config_data, log_queue, file_bytes, set())
+        except Exception as e:
+            mp_queue.put({"type": "error", "message": f"Fallo crítico en el Proceso Aislado: {str(e)}"})
+            
+    asyncio.run(main())
+
