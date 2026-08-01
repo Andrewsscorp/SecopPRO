@@ -193,10 +193,14 @@ def run_playwright_isolated(job_id, llave, urlproceso_limpia, raw_dir, zip_path,
                         "a[id^='lnkDownloadLink'], a[onclick*='DownloadFile'], a[onclick*='DownloadDocument']"
                     )
                     
-                    anchors_info = await page.evaluate(f"""() => Array.from(document.querySelectorAll("{selector_principal}")).map((a, i) => ({{
+                    raw_anchors = await page.evaluate(f"""() => Array.from(document.querySelectorAll("{selector_principal}")).map((a, i) => ({{
                         id: a.id || '',
-                        index: i
+                        index: i,
+                        text: a.innerText.trim().toLowerCase()
                     }}))""")
+                    
+                    # Filtrar falsos positivos (como los botones "Detalle" en Observaciones)
+                    anchors_info = [a for a in raw_anchors if 'detalle' not in a['text'] and 'detail' not in a['text']]
                     
                     total_links = len(anchors_info)
                     pdf_count = 0
