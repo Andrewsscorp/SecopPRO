@@ -65,7 +65,7 @@ El proyecto cuenta con una arquitectura Full-Stack moderna y desacoplada:
 ---
 
 ## 📜 Control de Versiones
-Revisar el archivo `CHANGELOG.md` para visualizar el registro histórico de mejoras y parches bajo el formato **Semantic Versioning (SemVer)**. La versión actual es la **2.3.0**, destacando el **Exportador Masivo Excel Multi-Hoja (SOQL)** para extracción de historiales a gran escala sin consumir la cuota de la IA (Lazy Loading), junto a las nuevas columnas de indicadores históricos y descargas PDF.
+Revisar el archivo `CHANGELOG.md` para visualizar el registro histórico de mejoras y parches bajo el formato **Semantic Versioning (SemVer)**. La versión actual es la **2.4.0**, destacando el **Motor de Reinicio Fantasma Multiplataforma**, un script agnóstico que gestiona bloqueos de puertos y Docker, junto con el **Exportador Masivo Excel Multi-Hoja (SOQL)** para extracción de historiales a gran escala sin consumir la cuota de la IA.
 
 ---
 > *"Diseñado con precisión algorítmica y excelencia estética."* - **SecopPRO**

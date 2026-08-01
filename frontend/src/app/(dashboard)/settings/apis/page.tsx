@@ -26,6 +26,9 @@ export default function APISettingsPage() {
     gemini: { type: null, msg: '' },
     groq: { type: null, msg: '' }
   });
+  
+  const [isRestarting, setIsRestarting] = useState(false);
+  const [restartMessage, setRestartMessage] = useState('');
 
   const tabs = ['Generales', 'APIs', 'Descargas', 'Rutas', 'Notificaciones', 'Seguridad'];
 
@@ -50,6 +53,15 @@ export default function APISettingsPage() {
         }
       })
       .catch(console.error);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && sessionStorage.getItem('restarted_success')) {
+      toast.success('¡Sistema en línea! Reinicio completado con éxito.', {
+        description: 'Todos los puertos han sido liberados y los motores arrancaron limpiamente.'
+      });
+      sessionStorage.removeItem('restarted_success');
+    }
   }, []);
 
   const handleUpdate = (provider: string, field: keyof APIConfig, value: any) => {
@@ -362,9 +374,129 @@ export default function APISettingsPage() {
         </div>
       )}
 
-      {activeTab !== 'APIs' && (
+      {activeTab === 'Seguridad' && (
+        <div className="animate-in fade-in duration-300">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="bg-red-100 p-2 rounded-lg">
+              <AlertCircle className="w-6 h-6 text-red-600" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-gray-800">Seguridad y Mantenimiento Avanzado</h2>
+              <p className="text-sm text-gray-500">Controles de bajo nivel para desarrolladores. Úselo bajo su propio riesgo.</p>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl border border-red-200 p-6 shadow-sm min-h-[260px] relative overflow-hidden">
+            {/* Adorno de fondo peligro */}
+            <div className="absolute top-0 right-0 w-64 h-64 bg-red-50 rounded-full blur-3xl transform translate-x-32 -translate-y-32 pointer-events-none opacity-60"></div>
+            
+            <div className="flex flex-col md:flex-row gap-8 relative z-10">
+              <div className="md:w-1/3 flex flex-col">
+                <div className="w-12 h-12 bg-red-50 border border-red-100 rounded-lg flex items-center justify-center mb-4">
+                  <Activity className="w-6 h-6 text-red-600" />
+                </div>
+                <h3 className="text-lg font-bold text-gray-800 mb-2">Reinicio de Emergencia</h3>
+                <p className="text-sm text-gray-600 mb-4 leading-relaxed">
+                  Cierra forzosamente los puertos activos (3000 y 8000) y reinicia automáticamente el motor principal para solucionar bloqueos de memoria o puertos huerfanos ("port already in use").
+                </p>
+                <div className="mt-auto bg-red-50 text-red-700 px-3 py-2 rounded-lg border border-red-100 text-xs font-medium">
+                  Requiere clave maestra.
+                </div>
+              </div>
+
+              <div className="md:w-2/3 flex flex-col justify-center">
+                <div className="bg-gray-50/50 rounded-xl p-6 border border-gray-100">
+                  <label className="text-sm font-bold text-gray-800 mb-1 block">Clave de Desarrollador</label>
+                  <p className="text-xs text-gray-500 mb-4">Ingrese la credencial criptográfica para autorizar la limpieza de procesos.</p>
+                  
+                  <div className="flex flex-col gap-3">
+                    <div className="relative">
+                      <input 
+                        type="password" 
+                        id="dev-password"
+                        placeholder="••••••••••••"
+                        className="w-full pl-4 pr-10 py-3 bg-white border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-red-500/50 focus:border-red-500 outline-none transition-all shadow-sm"
+                      />
+                    </div>
+                    <button 
+                      onClick={async (e) => {
+                        const input = document.getElementById('dev-password') as HTMLInputElement;
+                        if(!input.value) return toast.error('Ingrese la clave primero');
+                        
+                        setIsRestarting(true);
+                        setRestartMessage('Autorizando limpieza...');
+                        
+                        const startPolling = () => {
+                          setRestartMessage('Destruyendo procesos huérfanos...');
+                          setTimeout(() => setRestartMessage('Liberando puertos 8000 y 3000...'), 2000);
+                          setTimeout(() => setRestartMessage('Reiniciando servidor...'), 4000);
+                          
+                          setTimeout(() => {
+                            const interval = setInterval(async () => {
+                              try {
+                                const pingRes = await fetch('http://localhost:8000/api/settings/ping');
+                                if(pingRes.ok) {
+                                  clearInterval(interval);
+                                  setRestartMessage('¡Conexión establecida! Recargando...');
+                                  sessionStorage.setItem('restarted_success', 'true');
+                                  setTimeout(() => window.location.reload(), 1000);
+                                }
+                              } catch(e) {}
+                            }, 2000);
+                          }, 6000);
+                        };
+
+                        try {
+                          const res = await fetch('http://localhost:8000/api/settings/restart-system', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({password: input.value})
+                          });
+                          if(res.ok) {
+                            startPolling();
+                          } else {
+                            const data = await res.json();
+                            toast.error(data.detail || 'Clave incorrecta');
+                            setIsRestarting(false);
+                          }
+                        } catch(err) {
+                           startPolling(); // Fallback en caso de que el fetch aborte por la muerte inminente
+                        }
+                      }}
+                      className="w-full bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 text-white font-bold py-3 px-4 rounded-xl shadow-md hover:shadow-lg hover:shadow-red-500/20 transition-all active:scale-[0.98]"
+                    >
+                      Reiniciar Servidores y Puertos
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab !== 'APIs' && activeTab !== 'Seguridad' && (
         <div className="py-20 text-center text-gray-400">
           Esta sección ({activeTab}) está en construcción.
+        </div>
+      )}
+
+      {/* Overlay de Reinicio Fantasma */}
+      {isRestarting && (
+        <div className="fixed inset-0 bg-gray-900/90 z-50 flex items-center justify-center backdrop-blur-sm animate-in fade-in duration-500">
+          <div className="bg-white p-8 rounded-2xl max-w-md w-full mx-4 shadow-2xl flex flex-col items-center text-center">
+            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-6">
+              <RefreshCw className="w-8 h-8 text-red-600 animate-spin" />
+            </div>
+            <h2 className="text-2xl font-bold text-gray-800 mb-2">Reinicio de Emergencia</h2>
+            <p className="text-gray-500 mb-8 text-sm">Por favor no cierre esta ventana mientras el sistema realiza el mantenimiento profundo.</p>
+            
+            <div className="w-full bg-gray-100 rounded-full h-2 mb-4 overflow-hidden">
+              <div className="bg-red-500 h-full rounded-full animate-pulse" style={{ width: '100%' }}></div>
+            </div>
+            
+            <p className="text-red-600 font-medium text-sm animate-pulse">{restartMessage}</p>
+          </div>
         </div>
       )}
     </div>

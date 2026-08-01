@@ -12,7 +12,18 @@ Usamos el formato `X.Y.Z` (Ejemplo: `2.1.0`):
 
 ---
 
-## [2.3.0] - 2026-08-01 (Actual)
+## [2.4.0] - 2026-08-01 (Actual)
+### ✨ Nuevas Funcionalidades (Features)
+- **Motor de Reinicio Fantasma Multiplataforma:** Implementación de un sistema avanzado en Python (`psutil`) para limpiar procesos "zombie" o puertos bloqueados (`8000`, `3000`) desde el propio servidor de forma 100% silenciosa (`CREATE_NO_WINDOW`). Es agnóstico, adaptándose a Windows (mata consolas viejas), Linux y Docker.
+- **UI de Seguridad y Reinicio Avanzado:** Pestaña de "Seguridad" en Ajustes con diseño *Glassmorphism* rojo. Pide credencial criptográfica para autorizar bloqueos.
+- **Auto-sembrado de Clave Criptográfica:** El servidor inyecta automáticamente la clave maestra encriptada (AES-256) en la BD local durante su arranque si es una instalación nueva.
+
+### 🎨 Experiencia de Usuario (UX)
+- **Overlay Interactivo Post-Reinicio:** El frontend no se recarga ciegamente; despliega una pantalla completa inmersiva que detalla los pasos de apagado, pingeando en segundo plano hasta que el backend responde, recargando suavemente con un pop-up de "Sistema en línea".
+
+---
+
+## [2.3.0] - 2026-08-01
 ### ✨ Nuevas Funcionalidades (Features)
 - **Exportador Excel Masivo Multi-Hoja:** Se integró lógica SOQL de descargas agrupadas en el backend (`export.py`) para extraer en lotes la historia completa de múltiples terceros simultáneamente. La exportación Excel genera una hoja maestra más pestañas adicionales para cada NIT, y todo el proceso nutre la base de datos local **sin** gastar tokens de Inteligencia Artificial (IA bajo demanda).
 - **Indicadores Históricos y PDF Integrados:** El endpoint principal del Dashboard ahora mapea y cruza automáticamente en tiempo real (BD local) variables ricas como `cantidad_documentos_pdf`, `total_contratos`, y montos totales, permitiendo visualizar "El impacto" de cada contratista directamente en la tabla principal.

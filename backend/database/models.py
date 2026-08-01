@@ -191,3 +191,10 @@ class ContratacionTerceros(Base):
     resumen_calculado = Column(JSON) # Totales numéricos y agregaciones
     reporte_ia = Column(String) # Reporte markdown generado por la IA Groq
     fecha_actualizacion = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class ClavesDesarrollo(Base):
+    """Almacena la clave maestra de desarrollador para operaciones críticas del sistema"""
+    __tablename__ = "claves_desarrollo"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    clave_encriptada = Column(String, nullable=False)
+    fecha_creacion = Column(DateTime, default=datetime.utcnow)

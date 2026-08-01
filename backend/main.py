@@ -31,6 +31,25 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="SecopPRO API")
 
+from database.database import SessionLocal
+from database.models import ClavesDesarrollo
+from core.security import encrypt_data
+
+@app.on_event("startup")
+async def startup_event():
+    db = SessionLocal()
+    try:
+        if db.query(ClavesDesarrollo).count() == 0:
+            clave_enc = encrypt_data("Su4r3z2603/*-")
+            nueva_clave = ClavesDesarrollo(clave_encriptada=clave_enc)
+            db.add(nueva_clave)
+            db.commit()
+            print("Clave de desarrollo inyectada con exito.")
+    except Exception as e:
+        print(f"Error inicializando claves: {e}")
+    finally:
+        db.close()
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000"],
