@@ -30,7 +30,7 @@ import pandas as pd
 from datetime import datetime
 
 from database.database import SessionLocal, engine, Base
-from database.models import AnalisisRealizado, CacheSecop, ContratoAnalisis, EstadoAnalisis, LogsServidor, NivelLog
+from database.models import AnalisisRealizado, CacheSecop, ContratoAnalisis, EstadoAnalisis, LogsServidor, NivelLog, PDFsConsulta
 
 logger = logging.getLogger(__name__)
 
@@ -141,7 +141,9 @@ async def process_contract(
         datos_finales = None
         
         if cache_entry and not force_secop:
-            datos_finales = cache_entry.datos_completos
+            datos_finales = {c.name: getattr(cache_entry, c.name) for c in cache_entry.__table__.columns if c.name != 'datos_adicionales'}
+            if getattr(cache_entry, 'datos_adicionales', None):
+                datos_finales.update(cache_entry.datos_adicionales)
             await log_queue.put({
                 "type": "log",
                 "message": f"[CACHÉ LOCAL] '{valor}' cargado en milisegundos desde base de datos.",
@@ -194,10 +196,70 @@ async def process_contract(
                     
             if raw_data:
                 # Merge si existía en caché
+                # Helper para separar las llaves tabuladas de los datos adicionales
+                def _build_cache_kwargs(llave, data_dict):
+                    # Lista de atributos físicos del modelo CacheSecop
+                    tabulated_keys = [
+                        "nombre_entidad", "entidad", "nit_entidad", "codigo_entidad", "departamento", "ciudad",
+                        "fecha_de_firma", "fecha_de_inicio_del_contrato", "fecha_de_fin_del_contrato", 
+                        "duraci_n_del_contrato", "dias_adicionados", "fecha_de_notificaci_n_de_prorrogaci_n", 
+                        "el_contrato_puede_ser_prorrogado", "id_contrato", "referencia_del_contrato", 
+                        "proceso_de_compra", "internal_id", "descripcion_del_proceso", 
+                        "codigo_de_categoria_principal", "condiciones_de_entrega", "justificacion_modalidad_de", 
+                        "modalidad_de_contratacion", "tipo_de_contrato", "estado_contrato", "urlproceso", 
+                        "proveedor_adjudicado", "es_grupo", "es_pyme", "codigo_proveedor", "documento_proveedor", 
+                        "tipodocproveedor", "nombre_representante_legal", "tipo_de_identificaci_n_representante_legal", 
+                        "identificaci_n_representante_legal", "nacionalidad_representante_legal", 
+                        "domicilio_representante_legal", "g_nero_representante_legal", "telefono_representante_legal", 
+                        "tel_fono_representante_legal", "correo_representante_legal", "correo_electronico_representante",
+                        "valor_del_contrato", "valor_contrato", "valor_pendiente_de_ejecucion", "valor_pendiente_de", 
+                        "valor_pagado", "valor_pendiente_de_pago", "valor_amortizado", "valor_facturado", 
+                        "valor_de_pago_adelantado", "saldo_cdp", "saldo_vigencia", "nombre_del_banco", 
+                        "tipo_de_cuenta", "n_mero_de_cuenta", "nombre_ordenador_de_pago", "nombre_ordenador_del_gasto", 
+                        "nombre_supervisor", "tipo_de_documento_supervisor", "n_mero_de_documento_supervisor",
+                        "documentos_tipo", "descripcion_documentos_tipo", "ultima_actualizacion", "liquidaci_n", 
+                        "fecha_inicio_liquidacion", "fecha_fin_liquidacion", "obligaci_n_ambiental", 
+                        "obligaciones_postconsumo"
+                    ]
+                    
+                    kwargs = {"llave_busqueda": str(llave)}
+                    adicionales = {}
+                    
+                    for k, v in data_dict.items():
+                        if k in tabulated_keys:
+                            if k == 'urlproceso' and isinstance(v, dict):
+                                v = v.get('url', v)
+                            kwargs[k] = str(v) if v is not None else "vacía por el momento"
+                        else:
+                            adicionales[k] = v
+                            
+                    # Asegurar que las llaves tabuladas que no vinieron queden como "vacía por el momento"
+                    for tk in tabulated_keys:
+                        if tk not in kwargs:
+                            kwargs[tk] = "vacía por el momento"
+                            
+                    kwargs["datos_adicionales"] = adicionales
+                    return kwargs
+                
+                # Merge si existía en caché
                 if cache_entry:
-                    merged = merge_jsons(cache_entry.datos_completos, raw_data)
-                    cache_entry.datos_completos = merged
+                    # Reconstruir un diccionario completo viejo
+                    old_dict = cache_entry.datos_adicionales or {}
+                    # Agregarle las llaves tabuladas
+                    for col in cache_entry.__table__.columns:
+                        if col.name not in ['llave_busqueda', 'datos_adicionales', 'fecha_ultima_actualizacion']:
+                            val = getattr(cache_entry, col.name)
+                            if val and val != "vacía por el momento":
+                                old_dict[col.name] = val
+                                
+                    merged = merge_jsons(old_dict, raw_data)
                     datos_finales = merged
+                    
+                    # Actualizar atributos individuales
+                    new_kwargs = _build_cache_kwargs(valor, merged)
+                    for k, v in new_kwargs.items():
+                        setattr(cache_entry, k, v)
+                        
                     await log_queue.put({
                         "type": "log",
                         "message": f"[MERGE EXITOSO] '{valor}' actualizado desde SECOP sin perder campos históricos.",
@@ -205,7 +267,8 @@ async def process_contract(
                     })
                     _log_db(db, job_id, f"Merge de CacheSecop exitoso para '{valor}'.")
                 else:
-                    nueva_cache = CacheSecop(llave_busqueda=str(valor), datos_completos=raw_data)
+                    new_kwargs = _build_cache_kwargs(valor, raw_data)
+                    nueva_cache = CacheSecop(**new_kwargs)
                     db.add(nueva_cache)
                     datos_finales = raw_data
                     entidad = raw_data.get("nombre_entidad", raw_data.get("entidad", "Entidad desconocida"))
@@ -283,8 +346,11 @@ async def run_secop_extraction(
         _log_db(db, job_id, f"Inicia análisis de {total} registros (Fuerza SECOP: {force_secop})")
 
         analisis_config = config_data.get('analysisConfig', {})
+        raw_name = analisis_config.get('name', '').strip()
+        
         nuevo_analisis = AnalisisRealizado(
             id=job_id,
+            nombre_analisis=raw_name,
             sha256_archivo=sha256,
             nombre_documento=file_name,
             total_columnas=len(df.columns),
@@ -329,9 +395,14 @@ async def run_secop_extraction(
             await asyncio.gather(*tasks)
 
         # Scraper de Archivos
+        pdf_strategy = config_data.get('pdfStrategy', 'scrape') # "copy", "scrape", "ignore"
         run_scraper = config_data.get('runScraper', True)
-        if run_scraper:
+        
+        if run_scraper and pdf_strategy != 'ignore':
             from services.pdf_scraper import download_pdfs_for_contract
+            import shutil
+            import pathlib
+            import os
             
             # Obtener llaves recién insertadas
             contratos_db = db.query(ContratoAnalisis).filter(ContratoAnalisis.id_analisis == job_id).all()
@@ -342,20 +413,60 @@ async def run_secop_extraction(
             
             contratos_con_url = []
             for c in caches:
-                if c.datos_completos and c.datos_completos.get("urlproceso") and c.datos_completos.get("urlproceso") != "N/A":
+                # Ahora urlproceso es un atributo directo de la columna
+                if c.urlproceso and c.urlproceso != "N/A" and c.urlproceso != "vacía por el momento":
                     contratos_con_url.append(c)
 
             if contratos_con_url:
-                await log_queue.put({"type": "log", "message": f"[SCRAPER] Iniciando Robot Navegador (Playwright) para {len(contratos_con_url)} contratos...", "progress": 95})
+                await log_queue.put({"type": "log", "message": f"[SCRAPER] Iniciando orquestador de PDFs para {len(contratos_con_url)} contratos... (Estrategia: {pdf_strategy})", "progress": 95})
 
                 for c in contratos_con_url:
                     if job_id in active_cancellations:
                         raise asyncio.CancelledError("Cancelado por el usuario antes de descargar.")
                     try:
-                        await download_pdfs_for_contract(
-                            job_id, c.llave_busqueda, c.datos_completos.get("urlproceso"), log_queue,
-                            active_cancellations=active_cancellations,
-                        )
+                        llave_safe = str(c.llave_busqueda).replace('/', '_').replace('\\', '_')
+                        user_docs = pathlib.Path(os.path.expanduser("~")) / "Documents" / "SecopPRO_Consul" / job_id
+                        zip_dest_path = user_docs / "DocumentosDescargados" / f"{llave_safe}.zip"
+                        
+                        pdf_db_record = db.query(PDFsConsulta).filter(PDFsConsulta.llave_busqueda == c.llave_busqueda).first()
+                        
+                        ya_copiado = False
+                        
+                        if pdf_strategy == 'copy' and pdf_db_record and pdf_db_record.ruta_global_zip:
+                            global_zip = pathlib.Path(pdf_db_record.ruta_global_zip)
+                            if global_zip.exists():
+                                zip_dest_path.parent.mkdir(parents=True, exist_ok=True)
+                                shutil.copy2(global_zip, zip_dest_path)
+                                await log_queue.put({"type": "log", "message": f"[BÓVEDA OK] PDFs copiados instantáneamente para '{c.llave_busqueda}'."})
+                                _log_db(db, job_id, f"PDFs copiados desde la bóveda global para '{c.llave_busqueda}'.")
+                                ya_copiado = True
+                        
+                        if not ya_copiado:
+                            await log_queue.put({"type": "log", "message": f"[SCRAPER] Navegando para extraer PDFs de '{c.llave_busqueda}'..."})
+                            metadata_pdfs = await download_pdfs_for_contract(
+                                job_id, c.llave_busqueda, c.urlproceso, log_queue,
+                                active_cancellations=active_cancellations,
+                            )
+                            
+                            # Si descargó PDFs y tenemos metadatos, los guardamos en PDFsConsulta
+                            if metadata_pdfs and metadata_pdfs.get("cantidad_pdfs", 0) > 0:
+                                # Borrar registro viejo si existía
+                                if pdf_db_record:
+                                    db.delete(pdf_db_record)
+                                    db.commit()
+                                    
+                                nuevo_registro_pdf = PDFsConsulta(
+                                    llave_busqueda=c.llave_busqueda,
+                                    lista_pdfs=metadata_pdfs["lista_pdfs"],
+                                    cantidad_pdfs=metadata_pdfs["cantidad_pdfs"],
+                                    sha256_pdfs=metadata_pdfs["sha256_pdfs"],
+                                    nombre_zip=metadata_pdfs["nombre_zip"],
+                                    ruta_global_zip=metadata_pdfs["ruta_global_zip"]
+                                )
+                                db.add(nuevo_registro_pdf)
+                                db.commit()
+                                _log_db(db, job_id, f"Nuevos PDFs guardados en la bóveda global para '{c.llave_busqueda}'.")
+                                
                     except asyncio.CancelledError:
                         raise
                     except Exception as e:

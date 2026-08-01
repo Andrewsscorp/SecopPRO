@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Play, X, Bot, Zap } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Play, X, Bot, Zap, RefreshCw } from 'lucide-react';
 import { useMappingStore } from '@/store/useMappingStore';
 import { toast } from 'sonner';
 
@@ -19,7 +19,7 @@ export default function StartButton({ onStartAnalysis }: StartButtonProps) {
   // Nuevo estado para el toggle del scraper
   const [runScraper, setRunScraper] = useState(true);
 
-  const handleInitialClick = () => {
+  const handleInitialClick = async () => {
     const hasKey = mappedColumns.some(c => c.isKey);
     if (!hasKey) {
       toast.error('Debes seleccionar al menos una columna de tu Excel como "Llave" principal.', {
@@ -27,6 +27,18 @@ export default function StartButton({ onStartAnalysis }: StartButtonProps) {
       });
       return;
     }
+    
+    // Obtener el siguiente número consecutivo
+    try {
+      const res = await fetch('http://localhost:8000/api/next-audit-name');
+      if (res.ok) {
+         const data = await res.json();
+         setAnalysisName(data.next_name);
+      }
+    } catch (e) {
+      console.error("Fallo obteniendo consecutivo:", e);
+    }
+    
     setIsModalOpen(true);
   };
 
@@ -63,13 +75,24 @@ export default function StartButton({ onStartAnalysis }: StartButtonProps) {
             <div className="space-y-5 mb-6">
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-1.5">Nombre del Análisis</label>
-                <input 
-                  type="text" 
-                  value={analysisName}
-                  onChange={e => setAnalysisName(e.target.value)}
-                  placeholder="Ej. Auditoria_Alcaldia_Q2"
-                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all bg-gray-50/50 hover:bg-white focus:bg-white"
-                />
+                <div className="relative">
+                  <input 
+                    type="text" 
+                    value={analysisName}
+                    onChange={e => setAnalysisName(e.target.value)}
+                    placeholder="Ej. Auditoria_Alcaldia_Q2"
+                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all bg-gray-50/50 hover:bg-white focus:bg-white pr-10"
+                  />
+                  {analysisName && (
+                    <button 
+                      onClick={() => setAnalysisName('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 bg-gray-100 hover:bg-red-50 rounded-full p-1.5 transition-colors"
+                      title="Borrar nombre sugerido"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-1.5">Fecha de Corte</label>

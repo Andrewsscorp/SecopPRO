@@ -79,34 +79,38 @@ export const useDashboardStore = create<DashboardState>((set) => ({
   setResultsData: (data) => set({ resultsData: data }),
   
   selectedColumns: {
-    // General (Default true)
-    numero_proceso: true,
-    entidad: true,
+    // Requeridas por el usuario
+    nombre_entidad: true,
+    nit_entidad: true,
+    ciudad: true,
+    valor_contrato: true,
+    fecha_contrato: true,
+    nombre_representante: true,
+    identificacion_representante: true,
+    telefono_representante: true,
+    correo_representante: true,
+    tipo_contrato: true,
+
+    // Históricas / Otras (ocultas por defecto)
+    numero_proceso: false,
     objeto: false,
-    contratista: true,
-    nit: false,
-    valor: true,
-    modalidad: false,
-    estado: true,
-    
-    // SECOP (Default false except some)
+    contratista: false,
+    estado: false,
     documentos: false,
-    contratos: false,
     pagos: false,
     actas: false,
-    garantias: true,
+    garantias: false,
     polizas: false,
-    representante: false,
     
-    // Comparaciones (Default true for demo)
-    regla_firma_pub: true,
+    // Comparaciones Automáticas (ocultas por defecto)
+    regla_firma_pub: false,
     regla_firma_inicio: false,
     regla_inicio_fin: false,
     
-    // OCR
-    ocr_poliza: true,
-    ocr_garantia: true,
-    ocr_anticipo: true,
+    // Hallazgos OCR
+    ocr_poliza: false,
+    ocr_garantia: false,
+    ocr_anticipo: false,
   },
   
   toggleColumn: (key) => set((state) => ({

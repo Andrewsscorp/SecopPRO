@@ -13,7 +13,7 @@ import pandas as pd
 from api.schemas import StartAnalysisResponse
 from workers.secop_worker import worker_process_entrypoint
 from database.database import get_db
-from database.models import ContratoAnalisis, CacheSecop
+from database.models import ContratoAnalisis, CacheSecop, AnalisisRealizado
 
 router = APIRouter()
 
@@ -46,6 +46,26 @@ def process_queue_reader(mp_queue, async_queue, loop):
                 break
         except Exception:
             break
+
+@router.get("/next-audit-name")
+def get_next_audit_name(db: Session = Depends(get_db)):
+    import re
+    nombres = db.query(AnalisisRealizado.nombre_analisis).filter(
+        AnalisisRealizado.nombre_analisis.like("SECOP Auditoría %")
+    ).all()
+    
+    max_num = 0
+    pattern = re.compile(r"^SECOP Auditoría (\d+)$")
+    for (nombre,) in nombres:
+        if nombre:
+            match = pattern.match(nombre)
+            if match:
+                num = int(match.group(1))
+                if num > max_num:
+                    max_num = num
+                    
+    next_num = max_num + 1
+    return {"next_name": f"SECOP Auditoría {next_num:02d}"}
 
 @router.post("/check_cache")
 async def check_cache(
@@ -82,12 +102,17 @@ async def check_cache(
     valores_buscar = df[excel_col].dropna().astype(str).unique().tolist()
     total_buscar = len(valores_buscar)
     
-    # Buscar en caché
+    # Buscar en caché de datos
     cached_count = db.query(CacheSecop).filter(CacheSecop.llave_busqueda.in_(valores_buscar)).count()
     
+    # Buscar en bóveda global de PDFs
+    from database.models import PDFsConsulta
+    cached_pdfs_count = db.query(PDFsConsulta).filter(PDFsConsulta.llave_busqueda.in_(valores_buscar)).count()
+    
     return {
-        "total_contratos": total_buscar,
-        "contratos_cacheados": cached_count,
+        "total_count": total_buscar,
+        "cached_count": cached_count,
+        "cached_pdfs_count": cached_pdfs_count,
         "sha256": sha256,
         "nombre_archivo": file.filename
     }
@@ -95,7 +120,8 @@ async def check_cache(
 @router.post("/start", response_model=StartAnalysisResponse)
 async def start_analysis(
     file: UploadFile = File(...),
-    payload: str = Form(...)
+    payload: str = Form(...),
+    db: Session = Depends(get_db)
 ):
     try:
         config_data = json.loads(payload)
@@ -106,9 +132,15 @@ async def start_analysis(
     analysis_config = config_data.get('analysisConfig', {})
     raw_name = analysis_config.get('name', '').strip()
     if not raw_name:
-        raw_name = f"Auditoria_{str(uuid.uuid4())[:6]}"
+        raise HTTPException(status_code=400, detail="El nombre del análisis es requerido.")
+        
+    # Verificar si el nombre ya existe
+    existe = db.query(AnalisisRealizado).filter(AnalisisRealizado.nombre_analisis == raw_name).first()
+    if existe:
+        raise HTTPException(status_code=400, detail=f"El nombre '{raw_name}' ya está en uso. Por favor, elige otro o borra el anterior.")
     
-    job_id = re.sub(r'[\\/*?:"<>|]', '_', raw_name).replace(' ', '_')
+    # Hacer el job_id único agregándole un UUID para no colisionar internamente
+    job_id = re.sub(r'[\\/*?:"<>|]', '_', raw_name).replace(' ', '_') + "_" + str(uuid.uuid4())[:6]
     
     active_queues[job_id] = asyncio.Queue()
     mp_queue = mp.Queue()

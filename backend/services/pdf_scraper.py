@@ -326,14 +326,22 @@ def run_playwright_isolated(job_id, llave, urlproceso_limpia, raw_dir, zip_path,
 
 
 async def download_pdfs_for_contract(job_id: str, llave: str, urlproceso, log_queue: asyncio.Queue,
-                                      max_retries: int = 3, active_cancellations: set = None):
+                                      max_retries: int = 3, active_cancellations: set = None) -> dict:
     """Controlador asíncrono para ejecutar el scraper aislado. Crea los
-    directorios necesarios y lanza el hilo."""
+    directorios necesarios y lanza el hilo. Retorna metadatos de los PDFs descargados."""
+    if isinstance(urlproceso, str) and urlproceso.startswith("{") and "'url'" in urlproceso:
+        import ast
+        try:
+            parsed = ast.literal_eval(urlproceso)
+            urlproceso = parsed.get("url", urlproceso)
+        except Exception:
+            pass
+
     if isinstance(urlproceso, dict):
         urlproceso = urlproceso.get("url", "N/A")
     if not urlproceso or urlproceso == "N/A" or not str(urlproceso).startswith("http"):
         await log_queue.put({"type": "log", "message": f"[SCRAPER INFO] '{llave}' no tiene URL válida."})
-        return
+        return {}
 
     urlproceso_limpia = urlproceso
     llave_safe = re.sub(r'[\\/*?:"<>|]', "_", llave)
@@ -342,10 +350,11 @@ async def download_pdfs_for_contract(job_id: str, llave: str, urlproceso, log_qu
     raw_dir = user_docs / "DocumentosDescargados" / f"raw_{llave_safe}"
     zip_path = user_docs / "DocumentosDescargados" / f"{llave_safe}.zip"
 
+    # Si ya existe en esta corrida, retornamos vacío para no duplicar metadatos en BD
     if zip_path.exists():
         if raw_dir.exists():
             shutil.rmtree(raw_dir)
-        return
+        return {}
 
     raw_dir.mkdir(parents=True, exist_ok=True)
     zip_path.parent.mkdir(parents=True, exist_ok=True)
@@ -360,5 +369,39 @@ async def download_pdfs_for_contract(job_id: str, llave: str, urlproceso, log_qu
             STATE_FILE, main_loop, log_queue, active_cancellations or set(),
         )
 
+    # Calcular Hashes y preparar retorno
+    import hashlib
+    lista_pdfs = []
+    sha256_pdfs = {}
+    
     if raw_dir.exists():
+        for file_name in os.listdir(raw_dir):
+            file_path = raw_dir / file_name
+            if file_path.is_file():
+                lista_pdfs.append(file_name)
+                # Hashear archivo
+                sha256_hash = hashlib.sha256()
+                with open(file_path, "rb") as f:
+                    for byte_block in iter(lambda: f.read(4096), b""):
+                        sha256_hash.update(byte_block)
+                sha256_pdfs[file_name] = sha256_hash.hexdigest()
+                
         shutil.rmtree(raw_dir)
+
+    # Si se creó el ZIP satisfactoriamente y hay PDFs
+    if zip_path.exists() and lista_pdfs:
+        # Bóveda Global
+        cache_vault = pathlib.Path(r"C:\SecopPRO\CachePDFs")
+        cache_vault.mkdir(parents=True, exist_ok=True)
+        global_zip_path = cache_vault / f"{llave_safe}.zip"
+        shutil.copy2(zip_path, global_zip_path)
+        
+        return {
+            "lista_pdfs": lista_pdfs,
+            "cantidad_pdfs": len(lista_pdfs),
+            "sha256_pdfs": sha256_pdfs,
+            "nombre_zip": f"{llave_safe}.zip",
+            "ruta_global_zip": str(global_zip_path)
+        }
+        
+    return {}

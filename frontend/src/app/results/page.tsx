@@ -29,7 +29,7 @@ export default function DashboardPage() {
   const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
   
   // Scraper Robot State
-  const [scraperActive, setScraperActive] = useState(true);
+  const [scraperActive, setScraperActive] = useState(searchParams?.get('running') === 'true');
   const [scraperLog, setScraperLog] = useState("Conectando con Robot de Extracción...");
   
   // OCR State
@@ -60,6 +60,18 @@ export default function DashboardPage() {
     return () => clearTimeout(timer);
   }, [jobId, globalSearch]);
 
+  // Polling automático cuando el scraper está corriendo en segundo plano
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (scraperActive) {
+      interval = setInterval(() => {
+        fetchDashboardData(true); // Silencioso para no parpadear
+        fetchStats();
+      }, 5000); // 5 segundos
+    }
+    return () => clearInterval(interval);
+  }, [scraperActive, jobId, globalSearch]);
+
   const fetchStats = async () => {
     try {
       const res = await fetch(`http://localhost:8000/api/dashboard/stats?jobId=${jobId}`);
@@ -72,8 +84,8 @@ export default function DashboardPage() {
     }
   };
 
-  const fetchDashboardData = async () => {
-    setLoading(true);
+  const fetchDashboardData = async (hideLoading = false) => {
+    if (!hideLoading) setLoading(true);
     try {
       const url = `http://localhost:8000/api/dashboard/search?jobId=${jobId}&q=${encodeURIComponent(globalSearch)}`;
       const res = await fetch(url);
@@ -84,7 +96,7 @@ export default function DashboardPage() {
     } catch (error) {
       console.error("Error fetching data:", error);
     }
-    setLoading(false);
+    if (!hideLoading) setLoading(false);
   };
 
   const filteredData = resultsData.filter(row => {
@@ -317,30 +329,31 @@ export default function DashboardPage() {
               <FileSearch className="w-4 h-4 text-emerald-600" /> Información General
             </h3>
             <div className="grid grid-cols-2 gap-y-3 gap-x-4">
-              {renderToggle('numero_proceso', 'Número Proceso', 'llave_busqueda, id_contrato, referencia_del_contrato, proceso_de_compra, internal_id')}
-              {renderToggle('entidad', 'Entidad', 'nombre_entidad, entidad, nit_entidad, departamento, ciudad, codigo_entidad')}
-              {renderToggle('objeto', 'Objeto', 'descripcion_del_proceso, codigo_de_categoria_principal, condiciones_de_entrega, justificacion_modalidad_de')}
-              {renderToggle('contratista', 'Contratista', 'proveedor_adjudicado, es_grupo, es_pyme, codigo_proveedor')}
-              {renderToggle('nit', 'NIT', 'documento_proveedor, tipodocproveedor')}
-              {renderToggle('valor', 'Valor', 'valor_del_contrato, valor_contrato, valor_pendiente_de_ejecucion, valor_pendiente_de')}
-              {renderToggle('modalidad', 'Modalidad', 'modalidad_de_contratacion, tipo_de_contrato')}
-              {renderToggle('estado', 'Estado', 'estado_contrato')}
+              {renderToggle('nombre_entidad', 'Nombre Entidad')}
+              {renderToggle('nit_entidad', 'NIT Entidad')}
+              {renderToggle('ciudad', 'Ciudad')}
+              {renderToggle('valor_contrato', 'Valor Contrato')}
+              {renderToggle('fecha_contrato', 'Fecha Contrato')}
+              {renderToggle('nombre_representante', 'Nombre Representante Legal')}
+              {renderToggle('identificacion_representante', 'Cédula/NIT Representante')}
+              {renderToggle('telefono_representante', 'Teléfono Representante')}
+              {renderToggle('correo_representante', 'Correo Representante')}
+              {renderToggle('tipo_contrato', 'Tipo de Contrato')}
             </div>
           </div>
 
           {/* Panel 2 */}
           <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
             <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2 mb-4">
-              <Database className="w-4 h-4 text-emerald-600" /> Extraído desde SECOP
+              <Database className="w-4 h-4 text-emerald-600" /> Otras Columnas (Ocultas)
             </h3>
             <div className="grid grid-cols-2 gap-y-3 gap-x-4">
-              {renderToggle('documentos', 'Documentos', 'urlproceso, documentos_tipo, descripcion_documentos_tipo, ultima_actualizacion')}
-              {renderToggle('contratos', 'Contratos', 'fecha_de_firma, fecha_de_inicio_del_contrato, fecha_de_fin_del_contrato, duraci_n_del_contrato, dias_adicionados...')}
-              {renderToggle('pagos', 'Pagos', 'valor_pagado, valor_pendiente_de_pago, valor_amortizado, valor_facturado...')}
-              {renderToggle('actas', 'Actas', 'liquidaci_n, fecha_inicio_liquidacion, fecha_fin_liquidacion')}
-              {renderToggle('garantias', 'Garantías', 'obligaci_n_ambiental, obligaciones_postconsumo')}
-              {renderToggle('polizas', 'Pólizas', 'Pólizas y Garantías (Próximamente OCR)')}
-              {renderToggle('representante', 'Representante', 'nombre_representante_legal, tipo_de_identificaci_n_representante_legal...')}
+              {renderToggle('numero_proceso', 'Número Proceso')}
+              {renderToggle('estado', 'Estado')}
+              {renderToggle('objeto', 'Objeto')}
+              {renderToggle('contratista', 'Contratista')}
+              {renderToggle('documentos', 'Documentos')}
+              {renderToggle('pagos', 'Pagos')}
             </div>
           </div>
 
@@ -469,34 +482,84 @@ export default function DashboardPage() {
             </div>
           </div>
           
-          <div className="flex-1 overflow-auto">
-            <table className="w-full text-left text-xs whitespace-nowrap">
+          <div className="flex-1 overflow-x-auto overflow-y-auto">
+            <table className="w-full text-left text-xs whitespace-nowrap min-w-[1200px]">
               <thead className="bg-white border-b border-gray-200 text-gray-900 font-bold sticky top-0 shadow-sm z-10">
                 <tr>
+                  {selectedColumns.nombre_entidad && (
+                    <th className="px-4 py-3 align-top min-w-[150px]">
+                      <div>Nombre Entidad</div>
+                      <input type="text" placeholder="Filtrar..." className="mt-1.5 w-full text-[10px] p-1.5 border border-gray-200 rounded font-normal shadow-inner bg-gray-50 focus:bg-white focus:outline-none focus:border-emerald-500 transition-colors" value={columnFilters.nombre_entidad || ''} onChange={(e) => setColumnFilters({...columnFilters, nombre_entidad: e.target.value})} />
+                    </th>
+                  )}
+                  {selectedColumns.nit_entidad && (
+                    <th className="px-4 py-3 align-top min-w-[120px]">
+                      <div>NIT Entidad</div>
+                      <input type="text" placeholder="Filtrar..." className="mt-1.5 w-full text-[10px] p-1.5 border border-gray-200 rounded font-normal shadow-inner bg-gray-50 focus:bg-white focus:outline-none focus:border-emerald-500 transition-colors" value={columnFilters.nit_entidad || ''} onChange={(e) => setColumnFilters({...columnFilters, nit_entidad: e.target.value})} />
+                    </th>
+                  )}
+                  {selectedColumns.ciudad && (
+                    <th className="px-4 py-3 align-top min-w-[100px]">
+                      <div>Ciudad</div>
+                      <input type="text" placeholder="Filtrar..." className="mt-1.5 w-full text-[10px] p-1.5 border border-gray-200 rounded font-normal shadow-inner bg-gray-50 focus:bg-white focus:outline-none focus:border-emerald-500 transition-colors" value={columnFilters.ciudad || ''} onChange={(e) => setColumnFilters({...columnFilters, ciudad: e.target.value})} />
+                    </th>
+                  )}
+                  {selectedColumns.valor_contrato && (
+                    <th className="px-4 py-3 align-top min-w-[120px]">
+                      <div>Valor Contrato</div>
+                      <input type="text" placeholder="Filtrar..." className="mt-1.5 w-full text-[10px] p-1.5 border border-gray-200 rounded font-normal shadow-inner bg-gray-50 focus:bg-white focus:outline-none focus:border-emerald-500 transition-colors" value={columnFilters.valor_del_contrato || ''} onChange={(e) => setColumnFilters({...columnFilters, valor_del_contrato: e.target.value})} />
+                    </th>
+                  )}
+                  {selectedColumns.fecha_contrato && (
+                    <th className="px-4 py-3 align-top min-w-[120px]">
+                      <div>Fecha Contrato</div>
+                      <input type="text" placeholder="Filtrar..." className="mt-1.5 w-full text-[10px] p-1.5 border border-gray-200 rounded font-normal shadow-inner bg-gray-50 focus:bg-white focus:outline-none focus:border-emerald-500 transition-colors" value={columnFilters.fecha_de_firma || ''} onChange={(e) => setColumnFilters({...columnFilters, fecha_de_firma: e.target.value})} />
+                    </th>
+                  )}
+                  {selectedColumns.nombre_representante && (
+                    <th className="px-4 py-3 align-top min-w-[150px]">
+                      <div>Nombre Rep. Legal</div>
+                      <input type="text" placeholder="Filtrar..." className="mt-1.5 w-full text-[10px] p-1.5 border border-gray-200 rounded font-normal shadow-inner bg-gray-50 focus:bg-white focus:outline-none focus:border-emerald-500 transition-colors" value={columnFilters.nombre_representante_legal || ''} onChange={(e) => setColumnFilters({...columnFilters, nombre_representante_legal: e.target.value})} />
+                    </th>
+                  )}
+                  {selectedColumns.identificacion_representante && (
+                    <th className="px-4 py-3 align-top min-w-[120px]">
+                      <div>Cédula/NIT Rep.</div>
+                      <input type="text" placeholder="Filtrar..." className="mt-1.5 w-full text-[10px] p-1.5 border border-gray-200 rounded font-normal shadow-inner bg-gray-50 focus:bg-white focus:outline-none focus:border-emerald-500 transition-colors" value={columnFilters.identificaci_n_representante_legal || ''} onChange={(e) => setColumnFilters({...columnFilters, identificaci_n_representante_legal: e.target.value})} />
+                    </th>
+                  )}
+                  {selectedColumns.telefono_representante && (
+                    <th className="px-4 py-3 align-top min-w-[120px]">
+                      <div>Teléfono Rep.</div>
+                      <input type="text" placeholder="Filtrar..." className="mt-1.5 w-full text-[10px] p-1.5 border border-gray-200 rounded font-normal shadow-inner bg-gray-50 focus:bg-white focus:outline-none focus:border-emerald-500 transition-colors" value={columnFilters.telefono_representante_legal || ''} onChange={(e) => setColumnFilters({...columnFilters, telefono_representante_legal: e.target.value})} />
+                    </th>
+                  )}
+                  {selectedColumns.correo_representante && (
+                    <th className="px-4 py-3 align-top min-w-[150px]">
+                      <div>Correo Rep.</div>
+                      <input type="text" placeholder="Filtrar..." className="mt-1.5 w-full text-[10px] p-1.5 border border-gray-200 rounded font-normal shadow-inner bg-gray-50 focus:bg-white focus:outline-none focus:border-emerald-500 transition-colors" value={columnFilters.correo_representante_legal || ''} onChange={(e) => setColumnFilters({...columnFilters, correo_representante_legal: e.target.value})} />
+                    </th>
+                  )}
+                  {selectedColumns.tipo_contrato && (
+                    <th className="px-4 py-3 align-top min-w-[120px]">
+                      <div>Tipo Contrato</div>
+                      <input type="text" placeholder="Filtrar..." className="mt-1.5 w-full text-[10px] p-1.5 border border-gray-200 rounded font-normal shadow-inner bg-gray-50 focus:bg-white focus:outline-none focus:border-emerald-500 transition-colors" value={columnFilters.tipo_de_contrato || ''} onChange={(e) => setColumnFilters({...columnFilters, tipo_de_contrato: e.target.value})} />
+                    </th>
+                  )}
+                  
+                  {/* Additional / Optional Columns */}
                   {selectedColumns.numero_proceso && (
-                    <th className="px-4 py-3 align-top">
+                    <th className="px-4 py-3 align-top min-w-[120px]">
                       <div>Número Proceso</div>
                       <input type="text" placeholder="Filtrar..." className="mt-1.5 w-full text-[10px] p-1.5 border border-gray-200 rounded font-normal shadow-inner bg-gray-50 focus:bg-white focus:outline-none focus:border-emerald-500 transition-colors" value={columnFilters.llave_busqueda || ''} onChange={(e) => setColumnFilters({...columnFilters, llave_busqueda: e.target.value})} />
                     </th>
                   )}
-                  {selectedColumns.entidad && (
-                    <th className="px-4 py-3 align-top">
-                      <div>Entidad</div>
-                      <input type="text" placeholder="Filtrar..." className="mt-1.5 w-full text-[10px] p-1.5 border border-gray-200 rounded font-normal shadow-inner bg-gray-50 focus:bg-white focus:outline-none focus:border-emerald-500 transition-colors" value={columnFilters.nombre_entidad || ''} onChange={(e) => setColumnFilters({...columnFilters, nombre_entidad: e.target.value})} />
-                    </th>
-                  )}
-                  {selectedColumns.contratista && (
-                    <th className="px-4 py-3 align-top">
-                      <div>Contratista</div>
-                      <input type="text" placeholder="Filtrar..." className="mt-1.5 w-full text-[10px] p-1.5 border border-gray-200 rounded font-normal shadow-inner bg-gray-50 focus:bg-white focus:outline-none focus:border-emerald-500 transition-colors" value={columnFilters.proveedor_adjudicado || ''} onChange={(e) => setColumnFilters({...columnFilters, proveedor_adjudicado: e.target.value})} />
-                    </th>
-                  )}
-                  {selectedColumns.valor && <th className="px-4 py-3 align-top"><div>Valor del Contrato</div></th>}
                   {selectedColumns.regla_firma_pub && <th className="px-4 py-3 align-top"><div>Firma +3 vs Pub</div></th>}
                   {selectedColumns.regla_firma_inicio && <th className="px-4 py-3 align-top"><div>Firma vs Inicio</div></th>}
                   {selectedColumns.regla_inicio_fin && <th className="px-4 py-3 align-top"><div>Inicio vs Fin</div></th>}
                   {selectedColumns.estado && <th className="px-4 py-3 align-top"><div>Estado</div></th>}
-                  <th className="px-4 py-3 text-center align-top"><div>Acciones</div></th>
+                  
+                  <th className="px-4 py-3 text-center align-top min-w-[80px]"><div>Acciones</div></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 text-gray-700">
@@ -517,17 +580,25 @@ export default function DashboardPage() {
 
                     return (
                       <tr key={row.internal_id || idx} className="hover:bg-emerald-50/50 transition-colors">
-                        {selectedColumns.numero_proceso && <td className="px-4 py-3 font-medium text-emerald-700">{row.llave_busqueda}</td>}
-                        {selectedColumns.entidad && <td className="px-4 py-3">{row.nombre_entidad || row.entidad || 'N/A'}</td>}
-                        {selectedColumns.contratista && <td className="px-4 py-3 truncate max-w-[200px]">{row.proveedor_adjudicado || 'N/A'}</td>}
-                        {selectedColumns.valor && (
-                          <td className="px-4 py-3">
+                        {selectedColumns.nombre_entidad && <td className="px-4 py-3 truncate max-w-[200px]" title={row.nombre_entidad}>{row.nombre_entidad || 'N/A'}</td>}
+                        {selectedColumns.nit_entidad && <td className="px-4 py-3 font-medium text-gray-700">{row.nit_entidad || 'N/A'}</td>}
+                        {selectedColumns.ciudad && <td className="px-4 py-3">{row.ciudad || 'N/A'}</td>}
+                        {selectedColumns.valor_contrato && (
+                          <td className="px-4 py-3 font-medium">
                             {row.valor_del_contrato || row.valor_contrato 
                               ? `$${Number(row.valor_del_contrato || row.valor_contrato).toLocaleString('es-CO')}` 
                               : 'N/A'}
                           </td>
                         )}
+                        {selectedColumns.fecha_contrato && <td className="px-4 py-3">{row.fecha_de_firma || 'N/A'}</td>}
+                        {selectedColumns.nombre_representante && <td className="px-4 py-3 truncate max-w-[200px]" title={row.nombre_representante_legal}>{row.nombre_representante_legal || 'N/A'}</td>}
+                        {selectedColumns.identificacion_representante && <td className="px-4 py-3 font-medium text-gray-700">{row.identificaci_n_representante_legal || 'N/A'}</td>}
+                        {selectedColumns.telefono_representante && <td className="px-4 py-3">{row.telefono_representante_legal || 'N/A'}</td>}
+                        {selectedColumns.correo_representante && <td className="px-4 py-3 text-emerald-600 truncate max-w-[200px]" title={row.correo_representante_legal}>{row.correo_representante_legal || 'N/A'}</td>}
+                        {selectedColumns.tipo_contrato && <td className="px-4 py-3 truncate max-w-[150px]" title={row.tipo_de_contrato}>{row.tipo_de_contrato || 'N/A'}</td>}
                         
+                        {/* Optional columns */}
+                        {selectedColumns.numero_proceso && <td className="px-4 py-3 font-medium text-emerald-700">{row.llave_busqueda}</td>}
                         {/* REGLAS */}
                         {selectedColumns.regla_firma_pub && (
                           <td className="px-4 py-3">

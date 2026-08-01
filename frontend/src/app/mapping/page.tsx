@@ -20,7 +20,7 @@ export default function MappingPage() {
   
   // Estados para el modal de Caché
   const [showCacheModal, setShowCacheModal] = useState(false);
-  const [cacheStats, setCacheStats] = useState({ cached: 0, total: 0 });
+  const [cacheStats, setCacheStats] = useState({ cached: 0, total: 0, cached_pdfs: 0 });
 
   useEffect(() => {
     setMounted(true);
@@ -50,7 +50,7 @@ export default function MappingPage() {
       if (checkRes.ok) {
         const checkData = await checkRes.json();
         if (checkData.cached_count > 0) {
-            setCacheStats({ cached: checkData.cached_count, total: checkData.total_count });
+            setCacheStats({ cached: checkData.cached_count, total: checkData.total_count, cached_pdfs: checkData.cached_pdfs_count || 0 });
             setShowCacheModal(true);
             return; // Pausamos ejecución hasta que el usuario decida
         }
@@ -65,13 +65,14 @@ export default function MappingPage() {
     }
   };
 
-  const executeAnalysis = async (forceSecop: boolean) => {
+  const executeAnalysis = async (forceSecop: boolean, pdfStrategy: string = 'scrape') => {
     setShowCacheModal(false);
     
     try {
       const payload = useMappingStore.getState().getApiPayload();
       // Inyectar bandera de decisión
       payload.forceSecop = forceSecop;
+      payload.pdfStrategy = pdfStrategy;
       
       const formData = new FormData();
       formData.append('file', file!);
@@ -95,7 +96,7 @@ export default function MappingPage() {
       
       // Redirigir de inmediato
       setTimeout(() => {
-        router.push(`/results?jobId=${data.job_id}`);
+        router.push(`/results?jobId=${data.job_id}&running=true`);
       }, 1000);
       
     } catch (err) {
@@ -161,19 +162,30 @@ export default function MappingPage() {
             <h3 className="text-2xl font-bold text-gray-900 mb-2">Registros Previos Encontrados</h3>
             <p className="mb-6 text-gray-600 text-sm leading-relaxed">
               Hemos detectado que <strong className="text-gray-900 text-base">{cacheStats.cached}</strong> de los <strong className="text-gray-900 text-base">{cacheStats.total}</strong> contratos ya han sido consultados anteriormente y se encuentran en nuestra base de datos unificada (Caché).
+              {cacheStats.cached_pdfs > 0 && (
+                <span className="block mt-2 text-indigo-600 font-medium">
+                  Además, <strong className="text-indigo-800">{cacheStats.cached_pdfs}</strong> de estos contratos ya tienen sus PDFs guardados en la bóveda global.
+                </span>
+              )}
             </p>
             <div className="flex flex-col gap-3 justify-center mb-4">
               <button 
-                onClick={() => executeAnalysis(false)}
-                className="w-full px-4 py-3.5 bg-emerald-600 text-white rounded-xl font-semibold hover:bg-emerald-700 shadow-lg shadow-emerald-600/30 transition-all active:scale-[0.98]"
+                onClick={() => executeAnalysis(false, 'copy')}
+                className="w-full px-4 py-3.5 bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 shadow-lg shadow-indigo-600/30 transition-all active:scale-[0.98]"
               >
-                Cargar Datos del Caché (Rápido)
+                Cargar Datos y Copiar PDFs (Súper Rápido)
               </button>
               <button 
-                onClick={() => executeAnalysis(true)}
+                onClick={() => executeAnalysis(false, 'scrape')}
+                className="w-full px-4 py-3.5 bg-emerald-600 text-white rounded-xl font-semibold hover:bg-emerald-700 shadow-lg shadow-emerald-600/30 transition-all active:scale-[0.98]"
+              >
+                Cargar Datos y Re-descargar PDFs (Rápido)
+              </button>
+              <button 
+                onClick={() => executeAnalysis(true, 'scrape')}
                 className="w-full px-4 py-3.5 bg-white border-2 border-amber-500 text-amber-600 rounded-xl font-semibold hover:bg-amber-50 transition-all active:scale-[0.98]"
               >
-                Sobrescribir desde SECOP (Lento)
+                Sobrescribir TODO desde SECOP (Lento)
               </button>
             </div>
             <button onClick={() => setShowCacheModal(false)} className="text-sm text-gray-400 hover:text-gray-600 underline">

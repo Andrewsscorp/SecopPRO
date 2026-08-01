@@ -24,7 +24,9 @@ def get_contratos_df(db: Session, job_id: str) -> pd.DataFrame:
         
     data_list = []
     for vinculo, cache in resultados:
-        row = cache.datos_completos.copy() if cache.datos_completos else {}
+        row = {c.name: getattr(cache, c.name) for c in cache.__table__.columns if c.name != 'datos_adicionales'}
+        if getattr(cache, 'datos_adicionales', None):
+            row.update(cache.datos_adicionales)
         row['internal_id'] = vinculo.id
         row['llave_busqueda'] = vinculo.llave_busqueda
         
