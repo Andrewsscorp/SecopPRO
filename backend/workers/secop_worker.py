@@ -306,7 +306,9 @@ async def process_contract(
 
 def _resolve_secop_field(raw_secop_field: str) -> str:
     """Mapeo explícito y cerrado; sin heurística de substring."""
+    import unicodedata
     key = raw_secop_field.strip().lower()
+    key = ''.join(c for c in unicodedata.normalize('NFD', key) if unicodedata.category(c) != 'Mn')
     return FIELD_ALIASES.get(key, raw_secop_field)
 
 
