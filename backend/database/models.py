@@ -173,3 +173,11 @@ class LogsServidor(Base):
     timestamp = Column(DateTime, default=datetime.utcnow)
     mensaje = Column(String, nullable=False)
     nivel = Column(Enum(NivelLog), default=NivelLog.INFO)
+
+class ConfiguracionAPI(Base):
+    """Configuraciones de Proveedores de IA con claves encriptadas"""
+    __tablename__ = "configuracion_api"
+    proveedor = Column(String, primary_key=True) # "gemini", "grok"
+    api_key_encriptada = Column(String, nullable=False)
+    modelo = Column(String, nullable=False)
+    is_active = Column(Integer, default=0) # boolean in SQLite (0/1)

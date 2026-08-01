@@ -6,7 +6,7 @@ import {
   ArrowLeft, Download, FileText, Search, 
   BarChart2, AlertTriangle, CheckCircle, 
   Settings, SlidersHorizontal, Eye, DownloadCloud,
-  FileSearch, Scale, FileSignature, Database, HelpCircle
+  FileSearch, Scale, FileSignature, Database, HelpCircle, MessageSquare, X, Send
 } from 'lucide-react';
 import { useDashboardStore } from '@/store/useDashboardStore';
 import HackerOverlay from '@/components/loading/HackerOverlay';
