@@ -12,6 +12,20 @@ Usamos el formato `X.Y.Z` (Ejemplo: `2.1.0`):
 
 ---
 
+## [2.2.0] - 2026-08-01 (Actual)
+### ✨ Nuevas Funcionalidades (Features)
+- **Exportador Excel Inteligente y Dinámico (`exceljs`):** Se integró un motor de exportación Excel de última generación, completamente del lado del cliente, capaz de mapear automáticamente el 100% de las columnas ocultas del API de SECOP. Incluye autodescubrimiento de campos, formateo de moneda inteligente (reconoce campos "valor"), zebra striping corporativo y congelación de paneles.
+- **Paginación PDF Nativa y Avanzada:** Se diseñó un algoritmo de segmentación matemática ("Slicing") que divide documentos ultra-largos generados por IA en perfectas páginas A4. Evita superposiciones mediante máscaras de sangría (márgenes blancos) y ancla el pie de página ("membrete corporativo") uniformemente en todas las páginas generadas.
+
+### 🐛 Correcciones (Bug Fixes)
+- **Motor PDF reconstruido (Resolución Retina):** Se eliminó por completo la dependencia `html2pdf.js` y `html2canvas` debido a fallos de compatibilidad con los espacios de color modernos de Tailwind v3.4+ (`oklch`/`lab`). Se migró a un ecosistema puro de `html-to-image` con `jsPDF` a 3x de Pixel Ratio (300+ DPI), erradicando las descargas "borrosas" o en blanco.
+- **Rules of Hooks:** Se solventó un error de renderizado crítico en `ContractorReportModal` trasladando las declaraciones de estado al nivel superior del componente, restableciendo el ciclo de vida de React.
+
+### ✨ Nuevas Características
+- **Exportación Excel Automática:** Implementado el botón "Descargar Excel", el cual procesa iterativamente el arreglo de contratos y genera un documento CSV codificado en `UTF-8` con BOM (Byte Order Mark) para garantizar compatibilidad nativa e instantánea de tildes y formato numérico con Microsoft Excel.
+
+---
+
 ## 🚀 [2.1.0] - 2026-08-01
 
 ### ✨ Añadido (Nuevas Funcionalidades)

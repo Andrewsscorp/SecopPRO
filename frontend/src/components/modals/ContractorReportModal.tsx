@@ -21,6 +21,8 @@ export default function ContractorReportModal({ nit, onClose }: Props) {
   const [copiedAI, setCopiedAI] = useState(false);
   const [copiedValue, setCopiedValue] = useState(false);
   const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  const [isGeneratingExcel, setIsGeneratingExcel] = useState(false);
   
   // Refs for export
   const chart1WrapperRef = useRef<HTMLDivElement>(null);
@@ -179,6 +181,327 @@ export default function ContractorReportModal({ nit, onClose }: Props) {
     }
   };
 
+  const handleDownloadPDF = async () => {
+    if (!chart1ContentRef.current || !chart2ContentRef.current) return;
+    setIsGeneratingPDF(true);
+    try {
+      const { jsPDF } = await import('jspdf');
+      const { marked } = await import('marked');
+
+      // Helper to temporarily remove scrollbars for perfect image capture
+      const removeScrollbars = (contentRef: React.RefObject<HTMLDivElement>) => {
+        const scrollables = contentRef.current?.querySelectorAll('.overflow-y-auto, .max-h-24, .max-h-28, .custom-scrollbar') || [];
+        scrollables.forEach(el => {
+          const e = el as HTMLElement;
+          e.dataset.originalOverflow = e.style.overflow;
+          e.dataset.originalMaxHeight = e.style.maxHeight;
+          e.style.overflow = 'visible';
+          e.style.maxHeight = 'none';
+        });
+      };
+      
+      const restoreScrollbars = (contentRef: React.RefObject<HTMLDivElement>) => {
+        const scrollables = contentRef.current?.querySelectorAll('.overflow-y-auto, .max-h-24, .max-h-28, .custom-scrollbar') || [];
+        scrollables.forEach(el => {
+          const e = el as HTMLElement;
+          e.style.overflow = e.dataset.originalOverflow || '';
+          e.style.maxHeight = e.dataset.originalMaxHeight || '';
+        });
+      };
+
+      // 1. Prepare DOM
+      removeScrollbars(chart1ContentRef);
+      removeScrollbars(chart2ContentRef);
+      
+      // Wait for React to apply layout changes
+      await new Promise(r => setTimeout(r, 400));
+      
+      // 2. Capture charts as images using the safe htmlToImage library
+      const chart1Img = await htmlToImage.toPng(chart1ContentRef.current, { backgroundColor: '#ffffff', pixelRatio: 2 });
+      const chart2Img = await htmlToImage.toPng(chart2ContentRef.current, { backgroundColor: '#ffffff', pixelRatio: 2 });
+      
+      // Restore DOM
+      restoreScrollbars(chart1ContentRef);
+      restoreScrollbars(chart2ContentRef);
+      
+      // 3. Create a viewport-bound hidden container to force Chrome to paint it (avoids blank image)
+      const pdfContainer = document.createElement('div');
+      pdfContainer.style.position = 'fixed';
+      pdfContainer.style.top = '0';
+      pdfContainer.style.left = '0';
+      pdfContainer.style.width = '100vw';
+      pdfContainer.style.height = '100vh';
+      pdfContainer.style.overflow = 'hidden'; 
+      pdfContainer.style.zIndex = '-9999';
+      pdfContainer.style.pointerEvents = 'none';
+      pdfContainer.style.opacity = '0.01';
+      
+      const parsedMarkdown = await marked.parse(data?.reporte_ia || 'Sin reporte disponible.');
+            // PAGE 1: Text Report
+      const page1 = document.createElement('div');
+      page1.style.width = '800px';
+      page1.style.backgroundColor = '#ffffff';
+      page1.style.padding = '20px'; // Less internal padding, we use PDF margins now
+      page1.style.fontFamily = 'Helvetica, Arial, sans-serif';
+      page1.style.color = '#1f2937';
+      
+      page1.innerHTML = `
+        <div style="border-bottom: 3px solid #059669; padding-bottom: 15px; margin-bottom: 25px;">
+           <h1 style="color: #064e3b; font-size: 26px; text-transform: uppercase; margin: 0 0 8px 0; font-weight: bold;">Análisis: ${data?.nombre}</h1>
+           <p style="color: #4b5563; font-size: 14px; margin: 0; font-weight: bold;">NIT: ${data?.documento} &nbsp;|&nbsp; Fecha: ${dateStr}</p>
+        </div>
+        
+        <div style="margin-bottom: 20px; font-size: 15px; line-height: 1.8; text-align: justify;">
+           <style>
+             .markdown-content h1, .markdown-content h2, .markdown-content h3 { color: #064e3b; font-weight: bold; margin-top: 20px; margin-bottom: 12px; }
+             .markdown-content h1 { font-size: 20px; border-bottom: 2px solid #059669; padding-bottom: 6px; }
+             .markdown-content h2 { font-size: 17px; border-bottom: 1px solid #e5e7eb; padding-bottom: 4px; }
+             .markdown-content h3 { font-size: 15px; }
+             .markdown-content p { margin-bottom: 15px; }
+             .markdown-content ul { padding-left: 20px; margin-bottom: 15px; }
+             .markdown-content li { margin-bottom: 8px; }
+             .markdown-content strong { color: #111827; }
+           </style>
+           <div class="markdown-content">
+             ${parsedMarkdown}
+           </div>
+        </div>
+      `;
+      
+      // PAGE 2: Charts
+      const page2 = document.createElement('div');
+      page2.style.width = '800px';
+      page2.style.backgroundColor = '#ffffff';
+      page2.style.padding = '20px';
+      page2.style.fontFamily = 'Helvetica, Arial, sans-serif';
+      page2.style.color = '#1f2937';
+      
+      page2.innerHTML = `
+        <div style="border-bottom: 2px solid #059669; padding-bottom: 15px; margin-bottom: 30px;">
+           <h2 style="color: #064e3b; font-size: 22px; margin: 0; font-weight: bold;">Anexo Gráfico</h2>
+        </div>
+        
+        <div style="margin-bottom: 40px;">
+           <h3 style="color: #047857; margin-bottom: 15px; font-size: 16px; font-weight: bold;">Contratos por Año</h3>
+           <img src="${chart1Img}" style="width: 100%; max-width: 700px; display: block; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 8px; padding: 15px;" />
+        </div>
+        
+        <div>
+           <h3 style="color: #047857; margin-bottom: 15px; font-size: 16px; font-weight: bold;">Top 5 Entidades Contratantes</h3>
+           <img src="${chart2Img}" style="width: 100%; max-width: 700px; display: block; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 8px; padding: 15px;" />
+        </div>
+      `;
+      
+      pdfContainer.appendChild(page1);
+      pdfContainer.appendChild(page2);
+      document.body.appendChild(pdfContainer);
+      
+      // Allow DOM to settle and images to decode
+      await new Promise(r => setTimeout(r, 600));
+      
+      // 4. Generate images for each block (pixelRatio 3 for extremely sharp retina print quality)
+      await htmlToImage.toPng(page1, { backgroundColor: '#ffffff', style: { opacity: '1' } }); // Warm up
+      const img1 = await htmlToImage.toPng(page1, { backgroundColor: '#ffffff', pixelRatio: 3, style: { opacity: '1' } });
+      const img2 = await htmlToImage.toPng(page2, { backgroundColor: '#ffffff', pixelRatio: 3, style: { opacity: '1' } });
+      
+      const rect1 = page1.getBoundingClientRect();
+      const rect2 = page2.getBoundingClientRect();
+      
+      document.body.removeChild(pdfContainer);
+      
+      // 5. Build Standard A4 jsPDF with True Margins
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4'
+      });
+      
+      const pageWidth = 210;
+      const pageHeight = 297;
+      
+      const marginTop = 20;
+      const marginBottom = 25;
+      const marginSide = 20;
+      
+      const usableWidth = pageWidth - (marginSide * 2);
+      const usableHeight = pageHeight - marginTop - marginBottom;
+      
+      // Helper to slice long images with physical white masks for margins
+      const drawImageSlicedWithMargins = (imgData: string, rect: DOMRect, isNewPage = false) => {
+        if (isNewPage) pdf.addPage();
+        const imgRatio = rect.height / rect.width;
+        const pdfImgWidth = usableWidth;
+        const pdfImgHeight = usableWidth * imgRatio;
+        
+        let heightLeft = pdfImgHeight;
+        let yPosition = marginTop;
+        
+        while (heightLeft > 0) {
+          // Draw the image
+          pdf.addImage(imgData, 'PNG', marginSide, yPosition, pdfImgWidth, pdfImgHeight);
+          
+          // Draw Top White Mask (hides image bleeding into top margin)
+          pdf.setFillColor(255, 255, 255);
+          pdf.rect(0, 0, pageWidth, marginTop, 'F');
+          
+          // Draw Bottom White Mask (hides image bleeding into bottom margin)
+          pdf.rect(0, pageHeight - marginBottom, pageWidth, marginBottom, 'F');
+          
+          heightLeft -= usableHeight;
+          
+          if (heightLeft > 0) {
+            yPosition -= usableHeight; // Shift image UP for the next page slice
+            pdf.addPage();
+          }
+        }
+      };
+      
+      drawImageSlicedWithMargins(img1, rect1, false);
+      drawImageSlicedWithMargins(img2, rect2, true);
+      
+      // 6. Inject Footer "Membrete" on ALL pages cleanly inside the bottom margin
+      const totalPages = (pdf as any).internal.getNumberOfPages();
+      for (let i = 1; i <= totalPages; i++) {
+        pdf.setPage(i);
+        pdf.setFontSize(8);
+        pdf.setTextColor(150, 150, 150);
+        pdf.text(
+          'Informe generado por software SecopPRO by Andrés Suárez', 
+          pageWidth / 2, 
+          pageHeight - 10, // Perfectly inside the 25mm bottom mask
+          { align: 'center' }
+        );
+      }
+      
+      pdf.save(`Analisis_${data?.documento}.pdf`);
+      
+    } catch (err: any) {
+      console.error("PDF Error:", err);
+      alert("Hubo un error al generar el PDF corporativo: " + (err.message || String(err)));
+    } finally {
+      setIsGeneratingPDF(false);
+    }
+  };
+
+  const handleDownloadExcel = async () => {
+    if (!filteredData || filteredData.length === 0) {
+      alert("No hay datos para exportar.");
+      return;
+    }
+    setIsGeneratingExcel(true);
+    
+    try {
+      // Import dynamically to avoid bloating initial load
+      const ExcelJS = (await import('exceljs')).default;
+      const workbook = new ExcelJS.Workbook();
+      workbook.creator = 'SecopPRO';
+      workbook.created = new Date();
+      
+      const sheet = workbook.addWorksheet('Historial Contratos');
+      
+      // Estilo de encabezado elegante con colores pastel (verde esmeralda suave)
+      const headerStyle = {
+        font: { bold: true, color: { argb: 'FF064E3B' }, size: 11, name: 'Calibri' },
+        fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD1FAE5' } } as ExcelJS.Fill, // emerald-100
+        alignment: { vertical: 'middle', horizontal: 'center' } as Partial<ExcelJS.Alignment>,
+        border: {
+          top: { style: 'thin', color: { argb: 'FF10B981' } },
+          bottom: { style: 'medium', color: { argb: 'FF10B981' } },
+          left: { style: 'thin', color: { argb: 'FF10B981' } },
+          right: { style: 'thin', color: { argb: 'FF10B981' } }
+        } as Partial<ExcelJS.Borders>
+      };
+      
+      // Generar columnas dinámicamente basadas en allKeys
+      const formatHeader = (key: string) => key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+      
+      sheet.columns = allKeys.map(key => ({
+        header: formatHeader(key),
+        key: key,
+        width: key.includes('descripcion') || key.includes('objeto') ? 60 : 30
+      }));
+      
+      // Aplicar estilos a la cabecera
+      sheet.getRow(1).height = 30;
+      sheet.getRow(1).eachCell((cell) => {
+        cell.style = headerStyle;
+      });
+      
+      // Estilos alternados para las filas (zebra)
+      const rowStyleEven: ExcelJS.Fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF9FAFB' } }; // gray-50
+      const rowStyleOdd: ExcelJS.Fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFFFF' } }; // white
+      
+      // Rellenar datos iterando sobre todas las llaves dinámicamente
+      filteredData.forEach((c: any, index: number) => {
+        const rowData: Record<string, any> = {};
+        
+        allKeys.forEach(key => {
+          let val = c[key];
+          // Convertir a número si es un campo de valor
+          if (key.toLowerCase().includes('valor') && typeof val !== 'undefined' && val !== null) {
+             const parsed = parseFloat(val);
+             val = isNaN(parsed) ? val : parsed;
+          }
+          rowData[key] = (val !== null && val !== undefined && val !== '') ? val : 'N/A';
+        });
+        
+        const row = sheet.addRow(rowData);
+        
+        // Aplicar estilos a las celdas
+        const isEven = index % 2 === 0;
+        row.height = 35; // Altura para que respire el texto
+        
+        row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+          const currentKey = allKeys[colNumber - 1]; // colNumber is 1-indexed
+          const isDescription = currentKey.includes('descripcion') || currentKey.includes('objeto');
+          
+          cell.alignment = { vertical: 'middle', wrapText: isDescription };
+          cell.font = { name: 'Calibri', size: 10, color: { argb: 'FF374151' } };
+          cell.fill = isEven ? rowStyleEven : rowStyleOdd;
+          cell.border = {
+            bottom: { style: 'thin', color: { argb: 'FFE5E7EB' } },
+            right: { style: 'thin', color: { argb: 'FFE5E7EB' } }
+          };
+          
+          // Formato moneda para columnas que contengan "valor"
+          if (currentKey.toLowerCase().includes('valor')) {
+            cell.numFmt = '"$"#,##0.00';
+            cell.alignment = { ...cell.alignment, horizontal: 'right' };
+            cell.font = { ...cell.font, bold: true, color: { argb: 'FF059669' } }; // Valor en verde
+          }
+          
+          // Centrar fechas, códigos y estados
+          if (currentKey.includes('fecha') || currentKey.includes('estado') || currentKey.includes('codigo')) {
+             cell.alignment = { ...cell.alignment, horizontal: 'center' };
+          }
+        });
+      });
+      
+      // Congelar la fila superior (encabezados) y la primera columna (opcional, mejor solo superior para data ancha)
+      sheet.views = [
+        { state: 'frozen', xSplit: 0, ySplit: 1 }
+      ];
+      
+      // Generar archivo
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `Análisis_Contratos_Detallado_${data.documento}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+    } catch (err) {
+      console.error("Error generando Excel:", err);
+      alert("Hubo un error al generar el archivo Excel corporativo.");
+    } finally {
+      setIsGeneratingExcel(false);
+    }
+  };
+
   const chartDataYear = data?.resumen?.contratos_por_anio 
     ? Object.keys(data.resumen.contratos_por_anio).sort().map(year => ({ name: year, Contratos: data.resumen.contratos_por_anio[year] }))
     : [];
@@ -317,13 +640,37 @@ export default function ContractorReportModal({ nit, onClose }: Props) {
           </div>
           
           <div className="flex items-center gap-2 flex-wrap">
-            <button className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 text-gray-700 text-sm font-semibold rounded-lg hover:bg-gray-100 border border-gray-200 transition-colors">
-              <FileText className="w-4 h-4" />
-              Descargar PDF
+            <button 
+              onClick={handleDownloadPDF}
+              disabled={isGeneratingPDF}
+              className={`flex items-center gap-2 px-3 py-1.5 text-sm font-semibold rounded-lg border transition-colors ${
+                isGeneratingPDF 
+                  ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed' 
+                  : 'bg-gray-50 text-gray-700 hover:bg-gray-100 border-gray-200'
+              }`}
+            >
+              {isGeneratingPDF ? (
+                 <div className="w-4 h-4 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
+              ) : (
+                 <FileText className="w-4 h-4" />
+              )}
+              {isGeneratingPDF ? 'Generando PDF...' : 'Descargar PDF'}
             </button>
-            <button className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-700 text-sm font-semibold rounded-lg hover:bg-emerald-100 border border-emerald-200 transition-colors">
-              <FileSpreadsheet className="w-4 h-4" />
-              Descargar Excel
+            <button 
+              onClick={handleDownloadExcel} 
+              disabled={isGeneratingExcel}
+              className={`flex items-center gap-2 px-3 py-1.5 text-sm font-semibold rounded-lg border transition-colors ${
+                isGeneratingExcel
+                  ? 'bg-emerald-50 text-emerald-400 border-emerald-200 cursor-not-allowed'
+                  : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-emerald-200'
+              }`}
+            >
+              {isGeneratingExcel ? (
+                <div className="w-4 h-4 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <FileSpreadsheet className="w-4 h-4" />
+              )}
+              {isGeneratingExcel ? 'Generando Excel...' : 'Descargar Excel'}
             </button>
             <div className="w-px h-6 bg-gray-300 mx-2"></div>
             <button onClick={() => setIsFullscreen(!isFullscreen)} className="p-2 text-gray-500 hover:text-emerald-600 bg-gray-50 hover:bg-emerald-50 rounded-full transition-colors" title={isFullscreen ? "Minimizar" : "Pantalla Completa"}>
