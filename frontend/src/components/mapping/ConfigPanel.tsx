@@ -67,31 +67,6 @@ export default function ConfigPanel() {
         </div>
       </div>
 
-      {/* OCR Search Card */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-        <h3 className="text-lg font-bold text-gray-900 mb-1">Búsqueda OCR en Documentos</h3>
-        <p className="text-sm text-gray-500 mb-4">Escribe una palabra clave para buscar en todos los PDF.</p>
-        
-        <div className="relative mb-4">
-          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-            <Search className="h-5 w-5 text-gray-400" />
-          </div>
-          <input
-            type="text"
-            value={ocrSearchTerm}
-            onChange={(e) => setOcrSearchTerm(e.target.value)}
-            className="block w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition-all"
-            placeholder="Ej: póliza, acta, multa..."
-          />
-        </div>
-
-        <div className="bg-[#f0f7ff] border border-[#e0f0ff] rounded-xl p-3.5 flex gap-3 items-start">
-          <Info className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
-          <p className="text-xs text-blue-800 leading-relaxed font-medium">
-            El motor extraerá el contenido y usará Fuzzy Matching para encontrar coincidencias incluso si hay errores de escaneo.
-          </p>
-        </div>
-      </div>
     </div>
   );
 }

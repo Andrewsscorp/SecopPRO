@@ -7,7 +7,6 @@ import { useMappingStore } from '@/store/useMappingStore';
 import ColumnMapper from '@/components/mapping/ColumnMapper';
 import ConfigPanel from '@/components/mapping/ConfigPanel';
 import StartButton from '@/components/mapping/StartButton';
-import HackerOverlay from '@/components/loading/HackerOverlay';
 import { Layers, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -17,8 +16,11 @@ export default function MappingPage() {
   const { setAnalysisConfig } = useMappingStore();
   
   const [mounted, setMounted] = useState(false);
-  const [showHackerOverlay, setShowHackerOverlay] = useState(false);
   const [jobId, setJobId] = useState<string | undefined>(undefined);
+  
+  // Estados para el modal de Caché
+  const [showCacheModal, setShowCacheModal] = useState(false);
+  const [cacheStats, setCacheStats] = useState({ cached: 0, total: 0 });
 
   useEffect(() => {
     setMounted(true);
@@ -33,12 +35,46 @@ export default function MappingPage() {
     }
 
     try {
-      // getApiPayload should be fetched from the store via useMappingStore.getState()
-      // to guarantee we have the latest payload without triggering re-renders everywhere.
       const payload = useMappingStore.getState().getApiPayload();
       
       const formData = new FormData();
       formData.append('file', file);
+      formData.append('payload', JSON.stringify(payload));
+
+      // 1. Validar contra el Caché Global (SECOP Warehouse)
+      const checkRes = await fetch('http://localhost:8000/api/check_cache', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (checkRes.ok) {
+        const checkData = await checkRes.json();
+        if (checkData.cached_count > 0) {
+            setCacheStats({ cached: checkData.cached_count, total: checkData.total_count });
+            setShowCacheModal(true);
+            return; // Pausamos ejecución hasta que el usuario decida
+        }
+      }
+      
+      // Si no hay respuesta del check o es 0, ejecutamos con forceSecop = false
+      executeAnalysis(false);
+
+    } catch (err) {
+      console.error(err);
+      toast.error('Falló la validación con el backend de SecopPRO.');
+    }
+  };
+
+  const executeAnalysis = async (forceSecop: boolean) => {
+    setShowCacheModal(false);
+    
+    try {
+      const payload = useMappingStore.getState().getApiPayload();
+      // Inyectar bandera de decisión
+      payload.forceSecop = forceSecop;
+      
+      const formData = new FormData();
+      formData.append('file', file!);
       formData.append('payload', JSON.stringify(payload));
 
       const res = await fetch('http://localhost:8000/api/start', {
@@ -52,22 +88,20 @@ export default function MappingPage() {
       
       const data = await res.json();
       setJobId(data.job_id);
-      setShowHackerOverlay(true);
+      
+      toast.success('Análisis iniciado en 2do plano. Redirigiendo al Dashboard...', {
+        description: 'Puedes trabajar mientras los PDFs se descargan.'
+      });
+      
+      // Redirigir de inmediato
+      setTimeout(() => {
+        router.push(`/results?jobId=${data.job_id}`);
+      }, 1000);
+      
     } catch (err) {
       console.error(err);
       toast.error('Falló la conexión con el backend de SecopPRO.');
     }
-  };
-
-  const handleAnalysisComplete = () => {
-    setShowHackerOverlay(false);
-    toast.success('Análisis completado. Redirigiendo a resultados...', {
-      description: 'El backend notificó el fin del procesamiento.'
-    });
-    // Redirigir a la vista previa de datos reales
-    setTimeout(() => {
-      router.push(`/results?jobId=${jobId}`);
-    }, 1000);
   };
 
   if (!mounted) return <div className="p-8 flex justify-center items-center h-screen bg-[#f8fafc]">Cargando...</div>;
@@ -116,7 +150,38 @@ export default function MappingPage() {
         </div>
       </main>
 
-      {showHackerOverlay && <HackerOverlay jobId={jobId} onComplete={handleAnalysisComplete} />}
+      {showCacheModal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-md">
+          <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-lg w-full text-center border border-white/20 animate-in zoom-in duration-300">
+            <div className="w-16 h-16 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+              </svg>
+            </div>
+            <h3 className="text-2xl font-bold text-gray-900 mb-2">Registros Previos Encontrados</h3>
+            <p className="mb-6 text-gray-600 text-sm leading-relaxed">
+              Hemos detectado que <strong className="text-gray-900 text-base">{cacheStats.cached}</strong> de los <strong className="text-gray-900 text-base">{cacheStats.total}</strong> contratos ya han sido consultados anteriormente y se encuentran en nuestra base de datos unificada (Caché).
+            </p>
+            <div className="flex flex-col gap-3 justify-center mb-4">
+              <button 
+                onClick={() => executeAnalysis(false)}
+                className="w-full px-4 py-3.5 bg-emerald-600 text-white rounded-xl font-semibold hover:bg-emerald-700 shadow-lg shadow-emerald-600/30 transition-all active:scale-[0.98]"
+              >
+                Cargar Datos del Caché (Rápido)
+              </button>
+              <button 
+                onClick={() => executeAnalysis(true)}
+                className="w-full px-4 py-3.5 bg-white border-2 border-amber-500 text-amber-600 rounded-xl font-semibold hover:bg-amber-50 transition-all active:scale-[0.98]"
+              >
+                Sobrescribir desde SECOP (Lento)
+              </button>
+            </div>
+            <button onClick={() => setShowCacheModal(false)} className="text-sm text-gray-400 hover:text-gray-600 underline">
+              Cancelar Análisis
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

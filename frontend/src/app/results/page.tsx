@@ -6,9 +6,10 @@ import {
   ArrowLeft, Download, FileText, Search, 
   BarChart2, AlertTriangle, CheckCircle, 
   Settings, SlidersHorizontal, Eye, DownloadCloud,
-  FileSearch, Scale, FileSignature, Database, HelpCircle, Bot
+  FileSearch, Scale, FileSignature, Database, HelpCircle
 } from 'lucide-react';
 import { useDashboardStore } from '@/store/useDashboardStore';
+import HackerOverlay from '@/components/loading/HackerOverlay';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -31,36 +32,12 @@ export default function DashboardPage() {
   const [scraperActive, setScraperActive] = useState(true);
   const [scraperLog, setScraperLog] = useState("Conectando con Robot de Extracción...");
   
+  // OCR State
+  const [ocrSearchTerm, setOcrSearchTerm] = useState('');
+  const [isOcrRunning, setIsOcrRunning] = useState(false);
+  const [ocrResults, setOcrResults] = useState<any[]>([]);
+  
   const searchInputRef = useRef<HTMLInputElement>(null);
-
-  // Escuchar eventos en vivo del robot
-  useEffect(() => {
-    const evtSource = new EventSource(`http://localhost:8000/api/stream/${jobId}`);
-    
-    evtSource.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.type === 'log' && data.message.includes("[SCRAPER")) {
-          setScraperLog(data.message);
-        } else if (data.type === 'complete' || data.type === 'error') {
-          if(data.type === 'complete') setScraperLog("Extracción finalizada exitosamente.");
-          setTimeout(() => setScraperActive(false), 5000); // Dar 5s para leer que terminó
-          evtSource.close();
-        }
-      } catch (e) {
-        // ignore
-      }
-    };
-    
-    evtSource.onerror = () => {
-      evtSource.close();
-      setScraperActive(false);
-    };
-
-    return () => {
-      evtSource.close();
-    };
-  }, [jobId]);
 
   // Keyboard shortcut Ctrl+K
   useEffect(() => {
@@ -173,6 +150,30 @@ export default function DashboardPage() {
     } catch (error) {
       console.error("Error descargando ZIP:", error);
     }
+  };
+
+  const runOcrScan = async () => {
+    if (!ocrSearchTerm) return;
+    setIsOcrRunning(true);
+    setOcrResults([]);
+    try {
+      const res = await fetch('http://localhost:8000/api/dashboard/ocr', {
+         method: 'POST',
+         headers: {'Content-Type': 'application/json'},
+         body: JSON.stringify({jobId, searchTerm: ocrSearchTerm})
+      });
+      if (res.ok) {
+         const data = await res.json();
+         setOcrResults(data.details || []);
+         // Refresh global data so OCR appears in raw JSON viewer and Excel
+         fetchDashboardData();
+      } else {
+         alert("Hubo un error en el motor OCR. Revisa la consola.");
+      }
+    } catch(e) {
+      console.error("OCR Error:", e);
+    }
+    setIsOcrRunning(false);
   };
 
   // Helper for rendering checkboxes
@@ -391,6 +392,68 @@ export default function DashboardPage() {
           </div>
         </div>
 
+        {/* PANEL DE OCR AVANZADO */}
+        <div className="bg-white rounded-xl shadow-sm border border-emerald-100 overflow-hidden flex flex-col">
+          <div className="bg-gradient-to-r from-emerald-700 to-teal-800 px-6 py-4 flex items-center justify-between shadow-inner">
+             <h3 className="text-white font-bold flex items-center gap-3">
+               <div className="bg-white/20 p-1.5 rounded-lg"><FileSignature className="w-5 h-5 text-white" /></div>
+               Motor de Análisis Forense (OCR + IA)
+             </h3>
+             <span className="text-emerald-100 text-xs bg-black/20 px-3 py-1.5 rounded-full font-medium border border-white/10">Búsqueda profunda en PDFs</span>
+          </div>
+          <div className="p-6 bg-emerald-50/30">
+             <p className="text-sm text-gray-600 mb-4">Ingresa el término que deseas buscar en los documentos físicos descargados (ej. "póliza de cumplimiento", "anticipo"). El sistema usará OCR para leer los PDFs e IA para identificar variaciones del término, devolviendo el contexto exacto donde fue hallado.</p>
+             <div className="flex gap-4">
+               <input 
+                 type="text"
+                 placeholder="Término a buscar..."
+                 className="flex-1 border border-gray-300 rounded-xl px-5 py-3.5 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 shadow-sm text-sm"
+                 value={ocrSearchTerm}
+                 onChange={(e) => setOcrSearchTerm(e.target.value)}
+                 onKeyDown={(e) => e.key === 'Enter' && runOcrScan()}
+               />
+               <button 
+                 onClick={runOcrScan}
+                 disabled={isOcrRunning || !ocrSearchTerm}
+                 className="bg-emerald-600 text-white px-8 py-3.5 rounded-xl font-bold hover:bg-emerald-700 shadow-lg shadow-emerald-600/30 disabled:opacity-50 disabled:shadow-none flex items-center gap-2 transition-all active:scale-[0.98]"
+               >
+                 {isOcrRunning ? (
+                   <svg className="animate-spin -ml-1 mr-2 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                 ) : <Search className="w-5 h-5"/>}
+                 {isOcrRunning ? 'Analizando Documentos...' : 'Extraer Contexto'}
+               </button>
+             </div>
+             
+             {ocrResults.length > 0 && (
+                <div className="mt-8 border-t border-gray-200 pt-6">
+                   <h4 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
+                     <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                     Resultados Encontrados ({ocrResults.length})
+                   </h4>
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[500px] overflow-y-auto pr-2 pb-2">
+                     {ocrResults.map((r, i) => (
+                        <div key={i} className="bg-white border border-gray-200 p-5 rounded-xl shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
+                           <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500"></div>
+                           <div className="flex justify-between items-start mb-3">
+                             <div>
+                               <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded uppercase tracking-wider">Contrato: {r.llave}</span>
+                               <p className="text-xs text-gray-500 mt-1 truncate max-w-[200px]" title={r.archivo}>📄 {r.archivo}</p>
+                             </div>
+                           </div>
+                           <div className="bg-gray-50 p-3 rounded-lg border border-gray-100 relative">
+                             <span className="absolute -top-2 -left-2 text-2xl text-gray-300">"</span>
+                             <p className="text-sm text-gray-700 italic relative z-10 leading-relaxed font-serif">
+                               {r.match}
+                             </p>
+                           </div>
+                        </div>
+                     ))}
+                   </div>
+                </div>
+             )}
+          </div>
+        </div>
+
         {/* DATA TABLE */}
         <div className="flex-1 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col min-h-[400px]">
           <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50">
@@ -580,27 +643,13 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Robot Scraper Floating Widget */}
+      {/* El famoso Log Elegante (HackerOverlay) central y su estado Minimizado */}
       {scraperActive && (
-        <div className="fixed bottom-6 right-6 bg-gray-900 border border-gray-700 shadow-2xl rounded-xl p-4 flex flex-col gap-3 w-80 z-50 transform transition-all duration-500 animate-in slide-in-from-bottom-5">
-          <div className="flex items-center gap-3">
-            <div className="relative">
-              <div className="w-10 h-10 bg-emerald-900 rounded-full flex items-center justify-center border border-emerald-700">
-                <Bot className="w-5 h-5 text-emerald-400 animate-pulse" />
-              </div>
-              <span className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 rounded-full border-2 border-gray-900 animate-pulse"></span>
-            </div>
-            <div>
-              <h4 className="text-white text-sm font-bold">Robot Scraper Activo</h4>
-              <p className="text-gray-400 text-xs">Descargando físicos en 2do plano</p>
-            </div>
-          </div>
-          <div className="bg-gray-800 rounded p-2.5 border border-gray-700">
-            <p className="text-emerald-400 text-xs font-mono break-words leading-relaxed">
-              {scraperLog}
-            </p>
-          </div>
-        </div>
+        <HackerOverlay 
+          jobId={jobId} 
+          onComplete={() => setScraperActive(false)} 
+          onCancel={() => setScraperActive(false)} 
+        />
       )}
 
     </div>

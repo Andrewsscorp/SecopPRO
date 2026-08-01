@@ -2,7 +2,6 @@ from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from database.database import get_db
-from database.models import Contrato
 import pandas as pd
 import os
 import uuid
@@ -89,6 +88,14 @@ def export_excel(req: ExportRequest, db: Session = Depends(get_db)):
                     col_node_map[col] = toggle_key
                     seen.add(col)
             
+        # Añadir dinámicamente cualquier columna de OCR generada
+        ocr_columns = [c for c in df.columns if c.startswith("Resultado OCR ")]
+        for ocr_col in ocr_columns:
+            if ocr_col not in seen:
+                ordered_target_cols.append(ocr_col)
+                col_node_map[ocr_col] = "polizas" # Asignarlo al nodo de Pólizas/OCR
+                seen.add(ocr_col)
+                
         valid_cols = [c for c in ordered_target_cols if c in df.columns]
         if valid_cols:
             df = df[valid_cols]
