@@ -8,3 +8,4 @@ rapidocr-onnxruntime==1.2.3
 PyMuPDF==1.25.1
 thefuzz==0.22.1
 nltk==3.9.1
+holidays>=0.40
