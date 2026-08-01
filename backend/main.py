@@ -24,7 +24,7 @@ def initialize_system():
 initialize_system()
 
 from database.database import engine, Base
-from api.routes import analyzer, dashboard, export, settings, ai
+from api.routes import analyzer, dashboard, export, settings, ai, contractor
 
 # Inicializar Base de datos en C:/SecopPRO/Database/database.sqlite
 Base.metadata.create_all(bind=engine)
@@ -44,3 +44,4 @@ app.include_router(dashboard.router, prefix="/api/dashboard")
 app.include_router(export.router, prefix="/api/export")
 app.include_router(settings.router, prefix="/api/settings")
 app.include_router(ai.router, prefix="/api/ai")
+app.include_router(contractor.router, prefix="/api/contractor")

@@ -181,3 +181,13 @@ class ConfiguracionAPI(Base):
     api_key_encriptada = Column(String, nullable=False)
     modelo = Column(String, nullable=False)
     is_active = Column(Integer, default=0) # boolean in SQLite (0/1)
+
+class ContratacionTerceros(Base):
+    """Bóveda Global del historial completo de contratación por Tercero (NIT/Cédula)"""
+    __tablename__ = "contratacion_terceros"
+    documento = Column(String, primary_key=True)
+    nombre = Column(String)
+    datos_completos = Column(JSON) # JSON con todo el array de contratos devuelto por Socrata
+    resumen_calculado = Column(JSON) # Totales numéricos y agregaciones
+    reporte_ia = Column(String) # Reporte markdown generado por la IA Groq
+    fecha_actualizacion = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

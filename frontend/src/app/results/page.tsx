@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { useDashboardStore } from '@/store/useDashboardStore';
 import HackerOverlay from '@/components/loading/HackerOverlay';
+import ContractorReportModal from '@/components/modals/ContractorReportModal';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -29,10 +30,19 @@ export default function DashboardPage() {
   const [selectedContrato, setSelectedContrato] = useState<any | null>(null);
   const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
   const [isTableExpanded, setIsTableExpanded] = useState(false);
+  const [selectedNit, setSelectedNit] = useState<string | null>(null);
   
   // Scraper Robot State
   const [scraperActive, setScraperActive] = useState(searchParams?.get('running') === 'true');
   const [scraperLog, setScraperLog] = useState("Conectando con Robot de Extracción...");
+  
+  useEffect(() => {
+    if (searchParams?.get('running') === 'true') {
+      const currentUrl = new URL(window.location.href);
+      currentUrl.searchParams.delete('running');
+      window.history.replaceState({}, '', currentUrl.toString());
+    }
+  }, [searchParams]);
   
   // OCR State
   const [ocrSearchTerm, setOcrSearchTerm] = useState('');
@@ -611,9 +621,14 @@ export default function DashboardPage() {
                           <td className="px-4 py-3 font-medium text-gray-700">
                             <div className="flex items-center gap-2">
                               {row.documento_proveedor || 'N/A'}
-                              <button className="text-gray-400 hover:text-emerald-600 transition-colors" title="Acción reservada">
-                                <Eye className="w-4 h-4" />
-                              </button>
+                              {row.documento_proveedor && (
+                                <button 
+                                  onClick={() => setSelectedNit(row.documento_proveedor)}
+                                  className="text-gray-400 hover:text-emerald-600 transition-colors" 
+                                  title="Ver Historial del Contratista">
+                                  <Eye className="w-4 h-4" />
+                                </button>
+                              )}
                             </div>
                           </td>
                         )}
@@ -709,6 +724,14 @@ export default function DashboardPage() {
         </div>
 
       </main>
+
+      {/* MODALS */}
+      {selectedNit && (
+        <ContractorReportModal 
+          nit={selectedNit} 
+          onClose={() => setSelectedNit(null)} 
+        />
+      )}
 
       {/* Modal de Detalles Profundos */}
       {selectedContrato && (

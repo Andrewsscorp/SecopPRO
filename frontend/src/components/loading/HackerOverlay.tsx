@@ -13,6 +13,7 @@ interface HackerOverlayProps {
 export default function HackerOverlay({ jobId, onComplete, onCancel }: HackerOverlayProps) {
   const [logs, setLogs] = useState<string[]>(['[SISTEMA] Estableciendo conexión segura SSE...']);
   const [progress, setProgress] = useState(0);
+  const [hasError, setHasError] = useState(false);
   const logsEndRef = useRef<HTMLDivElement>(null);
   
   const isMinimized = useDashboardStore(state => state.isMinimized);
@@ -57,6 +58,7 @@ export default function HackerOverlay({ jobId, onComplete, onCancel }: HackerOve
         if (data.type === 'error') {
           eventSource.close();
           setLogs(prev => [...prev, `[ERROR CRÍTICO] ${data.message || 'Error desconocido'}`]);
+          setHasError(true);
         }
       } catch (err) {
         console.error("Error parseando evento SSE", err);
@@ -66,7 +68,8 @@ export default function HackerOverlay({ jobId, onComplete, onCancel }: HackerOve
     eventSource.onerror = (err) => {
       console.error("EventSource falló", err);
       eventSource.close();
-      setLogs(prev => [...prev, '[ERROR] Se perdió la conexión con el motor backend.']);
+      setLogs(prev => [...prev, '[ERROR] Se perdió la conexión con el motor backend o el trabajo no existe (Posible reinicio del servidor).']);
+      setHasError(true);
     };
 
     return () => {
@@ -162,7 +165,7 @@ export default function HackerOverlay({ jobId, onComplete, onCancel }: HackerOve
                   <p className="text-gray-500 text-xs font-mono">
                     Tiempo estimado restante: <span className="text-gray-400">{minutes}:{seconds}</span>
                   </p>
-                  {progress >= 100 && (
+                  { (progress >= 100 || hasError) && (
                     <button 
                       onClick={onComplete}
                       className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs px-4 py-1.5 rounded-md font-mono transition-colors shadow-lg shadow-emerald-900/20 border border-emerald-500/50"
