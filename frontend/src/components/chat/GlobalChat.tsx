@@ -66,9 +66,10 @@ export default function GlobalChat() {
   }, [chatMessages, chatLoading, isChatOpen, showConfirmDelete]);
 
   useEffect(() => {
-    fetch('http://localhost:8000/api/settings/keys')
-      .then(res => res.json())
-      .then(data => {
+    const fetchKeys = async () => {
+      try {
+        const res = await fetch('http://localhost:8000/api/settings/keys');
+        const data = await res.json();
         if (data.status === 'success' && data.data) {
           const providers = [];
           if (data.data.groq?.is_active) providers.push({ id: 'groq', name: 'Groq (Llama 3)' });
@@ -83,8 +84,14 @@ export default function GlobalChat() {
             setSelectedProvider(providers[0].id);
           }
         }
-      })
-      .catch(console.error);
+      } catch (err) {
+        console.error('API Keys fetch error, ignoring:', err);
+      }
+    };
+    
+    if (isChatOpen) {
+      fetchKeys();
+    }
   }, [isChatOpen]);
 
   const handleProviderSelect = (id: string) => {
@@ -187,7 +194,6 @@ export default function GlobalChat() {
                       className="absolute top-1 bottom-1 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-lg shadow-md border border-emerald-400/50 transition-all duration-300 ease-out z-0"
                       style={{
                         left: `${(activeProviders.findIndex(p => p.id === selectedProvider) >= 0 ? activeProviders.findIndex(p => p.id === selectedProvider) : 0) * (100 / activeProviders.length)}%`,
-                        width: `${100 / activeProviders.length}%`,
                         marginLeft: activeProviders.findIndex(p => p.id === selectedProvider) > 0 ? '4px' : '4px',
                         width: `calc(${100 / activeProviders.length}% - 8px)`
                       }}

@@ -12,7 +12,20 @@ Usamos el formato `X.Y.Z` (Ejemplo: `2.1.0`):
 
 ---
 
-## [2.2.0] - 2026-08-01 (Actual)
+## [2.3.0] - 2026-08-01 (Actual)
+### ✨ Nuevas Funcionalidades (Features)
+- **Exportador Excel Masivo Multi-Hoja:** Se integró lógica SOQL de descargas agrupadas en el backend (`export.py`) para extraer en lotes la historia completa de múltiples terceros simultáneamente. La exportación Excel genera una hoja maestra más pestañas adicionales para cada NIT, y todo el proceso nutre la base de datos local **sin** gastar tokens de Inteligencia Artificial (IA bajo demanda).
+- **Indicadores Históricos y PDF Integrados:** El endpoint principal del Dashboard ahora mapea y cruza automáticamente en tiempo real (BD local) variables ricas como `cantidad_documentos_pdf`, `total_contratos`, y montos totales, permitiendo visualizar "El impacto" de cada contratista directamente en la tabla principal.
+- **Configurador de Columnas Drag & Drop Avanzado:** El modal fue rediseñado para soportar manipulación masiva ("Marcar Todas / Desmarcar Todas"). 
+- **Dialog Box Elegante de Exportación:** Nuevo popup visual sin emojis, con diseño _Glassmorphism_ que guía al usuario claramente si desea anexar historiales profundos o si requiere un volcado de tabla plano y rápido.
+
+### 🐛 Correcciones (Bug Fixes)
+- **Lazy IA Loading en Dashboard:** Se rediseñó el endpoint "del Ojito" (`contractor.py`) para consultar a Groq *únicamente* si el tercero no tiene reporte previo. Elimina peticiones redundantes.
+- **Seguridad en Fallos de Red React (GlobalChat):** Integración de manejadores `try/catch` asíncronos en los `useEffect` de configuración para evitar el temido React Error Overlay cuando el `.bat` del backend aún no inicializa el servidor en `localhost`.
+
+---
+
+## [2.2.0] - 2026-08-01
 ### ✨ Nuevas Funcionalidades (Features)
 - **Exportador Excel Inteligente y Dinámico (`exceljs`):** Se integró un motor de exportación Excel de última generación, completamente del lado del cliente, capaz de mapear automáticamente el 100% de las columnas ocultas del API de SECOP. Incluye autodescubrimiento de campos, formateo de moneda inteligente (reconoce campos "valor"), zebra striping corporativo y congelación de paneles.
 - **Paginación PDF Nativa y Avanzada:** Se diseñó un algoritmo de segmentación matemática ("Slicing") que divide documentos ultra-largos generados por IA en perfectas páginas A4. Evita superposiciones mediante máscaras de sangría (márgenes blancos) y ancla el pie de página ("membrete corporativo") uniformemente en todas las páginas generadas.

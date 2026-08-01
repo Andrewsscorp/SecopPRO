@@ -2,7 +2,7 @@ import os
 from fastapi import APIRouter, Depends, Query, HTTPException, Body
 from sqlalchemy.orm import Session
 from database.database import get_db
-from database.models import ContratoAnalisis, CacheSecop, ResultadoOCR
+from database.models import ContratoAnalisis, CacheSecop, ResultadoOCR, PDFsConsulta, ContratacionTerceros
 import pandas as pd
 import json
 import asyncio
@@ -30,6 +30,32 @@ def get_contratos_df(db: Session, job_id: str) -> pd.DataFrame:
         row['internal_id'] = vinculo.id
         row['llave_busqueda'] = vinculo.llave_busqueda
         
+        # --- Adjuntar Info de PDFsConsulta ---
+        pdf_info = db.query(PDFsConsulta).filter(PDFsConsulta.llave_busqueda == vinculo.llave_busqueda).first()
+        if pdf_info:
+            row['cantidad_documentos_pdf'] = pdf_info.cantidad_pdfs
+            row['nombre_pdf'] = ", ".join(pdf_info.lista_pdfs) if pdf_info.lista_pdfs else "No encontrado"
+            # Tomar las llaves del sha256
+            row['sha_pdf'] = ", ".join([f"{k}: {v}" for k, v in pdf_info.sha256_pdfs.items()]) if pdf_info.sha256_pdfs else "No encontrado"
+        else:
+            row['cantidad_documentos_pdf'] = 0
+            row['nombre_pdf'] = "No encontrado"
+            row['sha_pdf'] = "No encontrado"
+            
+        # --- Adjuntar Info de Terceros ---
+        tercero_info = db.query(ContratacionTerceros).filter(ContratacionTerceros.documento == cache.documento_proveedor).first()
+        if tercero_info and tercero_info.resumen_calculado:
+            row['total_contratos'] = tercero_info.resumen_calculado.get("total_contratos", "No calculado")
+            row['valor_total_contratos'] = tercero_info.resumen_calculado.get("valor_total_contratos", "No calculado")
+            row['fecha_primer_contrato'] = tercero_info.resumen_calculado.get("fecha_primer_contrato", "No calculado")
+            entidades = tercero_info.resumen_calculado.get("lista_entidades", [])
+            row['lista_entidades_contrato'] = ", ".join(entidades) if entidades else "No calculado"
+        else:
+            row['total_contratos'] = "No calculado"
+            row['valor_total_contratos'] = "No calculado"
+            row['fecha_primer_contrato'] = "No calculado"
+            row['lista_entidades_contrato'] = "No calculado"
+
         # Mezclar también hallazgos locales del análisis (ej. OCR previo)
         if vinculo.hallazgos_ocr:
             row.update(vinculo.hallazgos_ocr)
@@ -40,7 +66,6 @@ def get_contratos_df(db: Session, job_id: str) -> pd.DataFrame:
             for ocr in ocr_results:
                 col_name = f"Resultado OCR {ocr.palabra_clave}"
                 texto = f"Contexto Previo: {ocr.contexto_previo}\n\nCoincidencia: {ocr.bloque_coincidencia}\n\nContexto Posterior: {ocr.contexto_posterior}"
-                # Si hay múltiples matches para la misma palabra, los unimos
                 if col_name in row and row[col_name]:
                     row[col_name] += f"\n\n--- OTRO HALLAZGO ---\n\n{texto}"
                 else:

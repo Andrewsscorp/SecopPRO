@@ -3,6 +3,7 @@ import { X, Bot, AlertTriangle, FileText, BarChart3, Clock, Building, Maximize2,
 import ReactMarkdown from 'react-markdown';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell } from 'recharts';
 import * as htmlToImage from 'html-to-image';
+import type * as ExcelJS from 'exceljs';
 
 interface Props {
   nit: string;
@@ -109,9 +110,9 @@ export default function ContractorReportModal({ nit, onClose }: Props) {
   };
 
   const handleDownloadAdvanced = async (
-    wrapperRef: React.RefObject<HTMLDivElement>, 
-    headerRef: React.RefObject<HTMLDivElement>,
-    contentRef: React.RefObject<HTMLDivElement>,
+    wrapperRef: React.RefObject<HTMLDivElement | null>, 
+    headerRef: React.RefObject<HTMLDivElement | null>,
+    contentRef: React.RefObject<HTMLDivElement | null>,
     chartTitle: string
   ) => {
     if (!wrapperRef.current || !headerRef.current || !contentRef.current) return;
@@ -189,7 +190,7 @@ export default function ContractorReportModal({ nit, onClose }: Props) {
       const { marked } = await import('marked');
 
       // Helper to temporarily remove scrollbars for perfect image capture
-      const removeScrollbars = (contentRef: React.RefObject<HTMLDivElement>) => {
+      const removeScrollbars = (contentRef: React.RefObject<HTMLDivElement | null>) => {
         const scrollables = contentRef.current?.querySelectorAll('.overflow-y-auto, .max-h-24, .max-h-28, .custom-scrollbar') || [];
         scrollables.forEach(el => {
           const e = el as HTMLElement;
@@ -200,7 +201,7 @@ export default function ContractorReportModal({ nit, onClose }: Props) {
         });
       };
       
-      const restoreScrollbars = (contentRef: React.RefObject<HTMLDivElement>) => {
+      const restoreScrollbars = (contentRef: React.RefObject<HTMLDivElement | null>) => {
         const scrollables = contentRef.current?.querySelectorAll('.overflow-y-auto, .max-h-24, .max-h-28, .custom-scrollbar') || [];
         scrollables.forEach(el => {
           const e = el as HTMLElement;
@@ -597,7 +598,7 @@ export default function ContractorReportModal({ nit, onClose }: Props) {
                             outerRadius={110} 
                             paddingAngle={5} 
                             dataKey="value" 
-                            label={({name, value}) => `${name.substring(0,22)} (${value})`}
+                            label={({name, value}) => `${name?.substring(0,22) || 'Desconocido'} (${value})`}
                             labelLine={{ stroke: '#6b7280', strokeWidth: 1.5 }}
                             isAnimationActive={false}
                           >
