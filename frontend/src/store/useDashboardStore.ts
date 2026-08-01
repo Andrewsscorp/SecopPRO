@@ -22,6 +22,8 @@ interface DashboardState {
     numero_proceso: boolean;
     entidad: boolean;
     objeto: boolean;
+    nombre_contratista: boolean;
+    nit_contratista: boolean;
     contratista: boolean;
     nit: boolean;
     valor: boolean;
@@ -90,6 +92,8 @@ export const useDashboardStore = create<DashboardState>((set) => ({
     telefono_representante: true,
     correo_representante: true,
     tipo_contrato: true,
+    nombre_contratista: true,
+    nit_contratista: true,
 
     // Históricas / Otras (ocultas por defecto)
     numero_proceso: false,

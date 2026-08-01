@@ -6,7 +6,8 @@ import {
   ArrowLeft, Download, FileText, Search, 
   BarChart2, AlertTriangle, CheckCircle, 
   Settings, SlidersHorizontal, Eye, DownloadCloud,
-  FileSearch, Scale, FileSignature, Database, HelpCircle, MessageSquare, X, Send
+  FileSearch, Scale, FileSignature, Database, HelpCircle, MessageSquare, X, Send,
+  Maximize2, Minimize2
 } from 'lucide-react';
 import { useDashboardStore } from '@/store/useDashboardStore';
 import HackerOverlay from '@/components/loading/HackerOverlay';
@@ -27,6 +28,7 @@ export default function DashboardPage() {
   const [exportingExcel, setExportingExcel] = useState(false);
   const [selectedContrato, setSelectedContrato] = useState<any | null>(null);
   const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
+  const [isTableExpanded, setIsTableExpanded] = useState(false);
   
   // Scraper Robot State
   const [scraperActive, setScraperActive] = useState(searchParams?.get('running') === 'true');
@@ -332,6 +334,8 @@ export default function DashboardPage() {
               {renderToggle('nombre_entidad', 'Nombre Entidad')}
               {renderToggle('nit_entidad', 'NIT Entidad')}
               {renderToggle('ciudad', 'Ciudad')}
+              {renderToggle('nombre_contratista', 'Nombre Contratista')}
+              {renderToggle('nit_contratista', 'NIT/Cédula Contratista')}
               {renderToggle('valor_contrato', 'Valor Contrato')}
               {renderToggle('fecha_contrato', 'Fecha Contrato')}
               {renderToggle('nombre_representante', 'Nombre Representante Legal')}
@@ -468,10 +472,17 @@ export default function DashboardPage() {
         </div>
 
         {/* DATA TABLE */}
-        <div className="flex-1 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col min-h-[400px]">
+        <div className={`bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col transition-all duration-300 ${isTableExpanded ? 'fixed inset-4 z-[9999] shadow-2xl flex-1 h-auto' : 'flex-1 min-h-[400px]'}`}>
           <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50">
-            <h3 className="text-sm font-bold text-gray-900">2. Vista previa del reporte</h3>
+            <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+              2. Vista previa del reporte
+            </h3>
             <div className="flex items-center gap-4">
+              <button onClick={() => setIsTableExpanded(!isTableExpanded)} className="text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-lg hover:bg-emerald-100 flex items-center gap-1.5 transition-all shadow-sm">
+                {isTableExpanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />} 
+                {isTableExpanded ? 'Minimizar vista' : 'Ampliar tabla'}
+              </button>
+              <div className="w-px h-4 bg-gray-300"></div>
               <button className="text-xs font-medium text-gray-600 hover:text-emerald-600 flex items-center gap-1.5 transition-colors">
                 <Settings className="w-3.5 h-3.5" /> Configurar columnas
               </button>
@@ -502,6 +513,18 @@ export default function DashboardPage() {
                     <th className="px-4 py-3 align-top min-w-[100px]">
                       <div>Ciudad</div>
                       <input type="text" placeholder="Filtrar..." className="mt-1.5 w-full text-[10px] p-1.5 border border-gray-200 rounded font-normal shadow-inner bg-gray-50 focus:bg-white focus:outline-none focus:border-emerald-500 transition-colors" value={columnFilters.ciudad || ''} onChange={(e) => setColumnFilters({...columnFilters, ciudad: e.target.value})} />
+                    </th>
+                  )}
+                  {selectedColumns.nombre_contratista && (
+                    <th className="px-4 py-3 align-top min-w-[150px]">
+                      <div>Nombre Contratista</div>
+                      <input type="text" placeholder="Filtrar..." className="mt-1.5 w-full text-[10px] p-1.5 border border-gray-200 rounded font-normal shadow-inner bg-gray-50 focus:bg-white focus:outline-none focus:border-emerald-500 transition-colors" value={columnFilters.proveedor_adjudicado || ''} onChange={(e) => setColumnFilters({...columnFilters, proveedor_adjudicado: e.target.value})} />
+                    </th>
+                  )}
+                  {selectedColumns.nit_contratista && (
+                    <th className="px-4 py-3 align-top min-w-[150px]">
+                      <div>NIT/Cédula Contratista</div>
+                      <input type="text" placeholder="Filtrar..." className="mt-1.5 w-full text-[10px] p-1.5 border border-gray-200 rounded font-normal shadow-inner bg-gray-50 focus:bg-white focus:outline-none focus:border-emerald-500 transition-colors" value={columnFilters.documento_proveedor || ''} onChange={(e) => setColumnFilters({...columnFilters, documento_proveedor: e.target.value})} />
                     </th>
                   )}
                   {selectedColumns.valor_contrato && (
@@ -583,6 +606,17 @@ export default function DashboardPage() {
                         {selectedColumns.nombre_entidad && <td className="px-4 py-3 truncate max-w-[200px]" title={row.nombre_entidad}>{row.nombre_entidad || 'N/A'}</td>}
                         {selectedColumns.nit_entidad && <td className="px-4 py-3 font-medium text-gray-700">{row.nit_entidad || 'N/A'}</td>}
                         {selectedColumns.ciudad && <td className="px-4 py-3">{row.ciudad || 'N/A'}</td>}
+                        {selectedColumns.nombre_contratista && <td className="px-4 py-3 truncate max-w-[200px]" title={row.proveedor_adjudicado}>{row.proveedor_adjudicado || 'N/A'}</td>}
+                        {selectedColumns.nit_contratista && (
+                          <td className="px-4 py-3 font-medium text-gray-700">
+                            <div className="flex items-center gap-2">
+                              {row.documento_proveedor || 'N/A'}
+                              <button className="text-gray-400 hover:text-emerald-600 transition-colors" title="Acción reservada">
+                                <Eye className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
+                        )}
                         {selectedColumns.valor_contrato && (
                           <td className="px-4 py-3 font-medium">
                             {row.valor_del_contrato || row.valor_contrato 
