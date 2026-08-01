@@ -57,7 +57,14 @@ async def _intentar_descarga(link, page, raw_dir: pathlib.Path) -> str:
 
     if extracted_url:
         async with page.expect_download(timeout=90000) as download_info:
-            await page.evaluate(f"window.location.href = '{extracted_url}'")
+            await page.evaluate("""(url) => {
+                const a = document.createElement('a');
+                a.href = url;
+                a.target = '_blank'; // Previene re-navegación del main DOM
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+            }""", extracted_url)
         download = await download_info.value
     else:
         async with page.expect_download(timeout=90000) as download_info:
@@ -185,14 +192,19 @@ def run_playwright_isolated(job_id, llave, urlproceso_limpia, raw_dir, zip_path,
                     selector_principal = (
                         "a[id^='lnkDownloadLink'], a[onclick*='DownloadFile'], a[onclick*='DownloadDocument']"
                     )
-                    locator_principal = page.locator(selector_principal)
-                    total_links = await locator_principal.count()
+                    
+                    anchors_info = await page.evaluate(f"""() => Array.from(document.querySelectorAll("{selector_principal}")).map((a, i) => ({{
+                        id: a.id || '',
+                        index: i
+                    }}))""")
+                    
+                    total_links = len(anchors_info)
                     pdf_count = 0
                     consecutive_errors = 0
 
                     if total_links > 0:
                         send_log("log", f"[SCRAPER] 📁 ¡Se encontraron {total_links} documentos con el selector principal!")
-                        for i in range(total_links):
+                        for i, info in enumerate(anchors_info):
                             if job_id in active_cancellations:
                                 raise asyncio.CancelledError("Interrumpido por el usuario en medio de la descarga.")
 
@@ -201,7 +213,13 @@ def run_playwright_isolated(job_id, llave, urlproceso_limpia, raw_dir, zip_path,
                             send_log("log", f"[SCRAPER] ⬇️ Descargando documento {i + 1} de {total_links} (delay {delay:.1f}s)...")
 
                             try:
-                                safe_name = await _intentar_descarga(locator_principal.nth(i), page, raw_dir)
+                                if info['id']:
+                                    link = page.locator(f"id={info['id']}")
+                                else:
+                                    link = page.locator(selector_principal).nth(info['index'])
+                                
+                                await link.wait_for(state="attached", timeout=10000)
+                                safe_name = await _intentar_descarga(link, page, raw_dir)
                                 pdf_count += 1
                                 consecutive_errors = 0
                                 send_log("log", f"[SCRAPER] ✅ Guardado: {safe_name}")
@@ -218,14 +236,16 @@ def run_playwright_isolated(job_id, llave, urlproceso_limpia, raw_dir, zip_path,
                         # cada <a> con múltiples awaits individuales — mucho más rápido
                         # en páginas con muchos enlaces.
                         anchors_info = await page.evaluate(
-                            """() => Array.from(document.querySelectorAll('a')).map(a => ({
+                            """() => Array.from(document.querySelectorAll('a')).map((a, i) => ({
                                 href: a.getAttribute('href') || '',
                                 onclick: a.getAttribute('onclick') || '',
-                                text: (a.innerText || '').trim()
+                                text: (a.innerText || '').trim(),
+                                id: a.id || '',
+                                index: i
                             }))"""
                         )
-                        valid_fallback_indices = [
-                            i for i, info in enumerate(anchors_info)
+                        valid_fallbacks = [
+                            info for info in anchors_info
                             if ".pdf" in info["href"].lower()
                             or ".pdf" in info["text"].lower()
                             or "descargar" in info["text"].lower()
@@ -233,18 +253,21 @@ def run_playwright_isolated(job_id, llave, urlproceso_limpia, raw_dir, zip_path,
                             or "download" in info["onclick"].lower()
                         ]
 
-                        fallback_links_locator = page.locator("a")
-                        total_fallbacks = len(valid_fallback_indices)
+                        total_fallbacks = len(valid_fallbacks)
                         if total_fallbacks > 0:
                             send_log("log", f"[SCRAPER] 📁 Buscando en {total_fallbacks} enlaces alternativos...")
-                            for i, idx in enumerate(valid_fallback_indices):
+                            for i, info in enumerate(valid_fallbacks):
                                 if job_id in active_cancellations:
                                     raise asyncio.CancelledError("Interrumpido por el usuario en medio de la descarga.")
                                 try:
                                     send_log("log", f"[SCRAPER] ⬇️ Descargando alternativo {i + 1} de {total_fallbacks}...")
-                                    safe_name = await _intentar_descarga(
-                                        fallback_links_locator.nth(idx), page, raw_dir
-                                    )
+                                    if info['id']:
+                                        link = page.locator(f"id={info['id']}")
+                                    else:
+                                        link = page.locator("a").nth(info['index'])
+                                    
+                                    await link.wait_for(state="attached", timeout=10000)
+                                    safe_name = await _intentar_descarga(link, page, raw_dir)
                                     pdf_count += 1
                                     send_log("log", f"[SCRAPER] ✅ Guardado: {safe_name}")
                                 except Exception as e_fallback:
