@@ -58,12 +58,12 @@ async def _intentar_descarga(link, page, raw_dir: pathlib.Path) -> str:
     if extracted_url:
         async with page.expect_download(timeout=90000) as download_info:
             await page.evaluate("""(url) => {
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = ''; // Forza la descarga sin abrir pestañas ni recargar el DOM
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
+                const iframe = document.createElement('iframe');
+                iframe.style.display = 'none';
+                iframe.src = url;
+                document.body.appendChild(iframe);
+                // No lo removemos inmediatamente para darle tiempo al navegador de iniciar la descarga
+                setTimeout(() => document.body.removeChild(iframe), 15000);
             }""", extracted_url)
         download = await download_info.value
     else:
