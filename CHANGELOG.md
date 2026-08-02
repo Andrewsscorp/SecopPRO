@@ -12,7 +12,21 @@ Usamos el formato `X.Y.Z` (Ejemplo: `2.1.0`):
 
 ---
 
-## [2.4.0] - 2026-08-01 (Actual)
+## [2.5.0] - 2026-08-01 (Actual)
+### ✨ Nuevas Funcionalidades (Features)
+- **Reintento de Análisis en Caliente:** Nueva arquitectura para volver a procesar análisis masivos desde la base de datos sin necesitar el archivo de Excel original, con un nuevo endpoint `/api/retry-job` impulsado por colas asíncronas de Python (`multiprocessing.Queue`).
+- **Vista de Historial de Consultas:** Creación del dashboard `documents/page.tsx` para listar con paginación los análisis previos, con capacidades de retomar el procesamiento directo en tiempo real.
+
+### 🚀 Rendimiento (Performance)
+- **Eliminación del N+1 Query Problem:** El endpoint principal del dashboard (`/api/dashboard/stats` y `/search`) fue reescrito de cero utilizando consultas vectorizadas `in_` con diccionarios de memoria en Python, lo que redujo el tiempo de carga de 2,500 registros de 40 segundos a menos de 1 segundo de forma instantánea.
+
+### 🐛 Correcciones (Bug Fixes)
+- **Duplicidad de Contratos en Reintentos:** Se corrigió una fuga lógica en `secop_worker.py` que clonaba todos los metadatos de los contratos cada vez que el usuario presionaba "Reintentar Análisis". Ahora valida el vínculo de la base de datos antes de reinsertar.
+- **Configuraciones CORS Globales:** Re-configuración de la capa de seguridad de FastAPI (CORS Middleware) para evitar `Failed to fetch` durante peticiones preflight (`OPTIONS`) cuando el cliente y servidor negocian puertos locales distintos.
+
+---
+
+## [2.4.0] - 2026-08-01
 ### ✨ Nuevas Funcionalidades (Features)
 - **Motor de Reinicio Fantasma Multiplataforma:** Implementación de un sistema avanzado en Python (`psutil`) para limpiar procesos "zombie" o puertos bloqueados (`8000`, `3000`) desde el propio servidor de forma 100% silenciosa (`CREATE_NO_WINDOW`). Es agnóstico, adaptándose a Windows (mata consolas viejas), Linux y Docker.
 - **UI de Seguridad y Reinicio Avanzado:** Pestaña de "Seguridad" en Ajustes con diseño *Glassmorphism* rojo. Pide credencial criptográfica para autorizar bloqueos.

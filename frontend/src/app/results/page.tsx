@@ -7,7 +7,7 @@ import {
   BarChart2, AlertTriangle, CheckCircle, 
   Settings, SlidersHorizontal, Eye, DownloadCloud,
   FileSearch, Scale, FileSignature, Database, HelpCircle, MessageSquare, X, Send,
-  Maximize2, Minimize2
+  Maximize2, Minimize2, RefreshCw
 } from 'lucide-react';
 import { useDashboardStore } from '@/store/useDashboardStore';
 import HackerOverlay from '@/components/loading/HackerOverlay';
@@ -131,6 +131,8 @@ export default function DashboardPage() {
   const [isTableExpanded, setIsTableExpanded] = useState(false);
   const [selectedNit, setSelectedNit] = useState<string | null>(null);
   const [showColumnConfigModal, setShowColumnConfigModal] = useState(false);
+  const [showRetryModal, setShowRetryModal] = useState(false);
+  const [retrying, setRetrying] = useState(false);
   
   // Scraper Robot State
   const [scraperActive, setScraperActive] = useState(searchParams?.get('running') === 'true');
@@ -304,6 +306,34 @@ export default function DashboardPage() {
     setIsOcrRunning(false);
   };
 
+  const executeRetry = async (forceSecop: boolean, pdfStrategy: string) => {
+    setShowRetryModal(false);
+    setRetrying(true);
+    try {
+      const res = await fetch('http://localhost:8000/api/retry-job', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          job_id: jobId,
+          force_secop: forceSecop,
+          pdf_strategy: pdfStrategy
+        })
+      });
+      if (res.ok) {
+        // Clear results before restarting
+        setResultsData([]);
+        setScraperActive(true);
+      } else {
+        const err = await res.json();
+        alert(err.detail || "Error al reintentar el análisis");
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Error de conexión al servidor");
+    }
+    setRetrying(false);
+  };
+
   // Helper for rendering checkboxes
   const renderToggle = (key: keyof typeof selectedColumns, label: string, tooltip: string = "") => (
     <div className="flex items-center justify-between group relative">
@@ -352,6 +382,15 @@ export default function DashboardPage() {
         </div>
         
         <div className="flex items-center gap-3">
+          <button 
+            onClick={() => setShowRetryModal(true)}
+            disabled={exportingExcel || loading || retrying || scraperActive}
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-lg hover:bg-indigo-700 transition-colors shadow-sm disabled:opacity-50"
+          >
+            <RefreshCw className={`w-4 h-4 ${retrying ? 'animate-spin' : ''}`} />
+            Reintentar Análisis
+          </button>
+          
           <button className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-semibold rounded-lg hover:bg-gray-50 transition-colors shadow-sm">
             <FileText className="w-4 h-4" />
             Exportar PDF
@@ -432,6 +471,20 @@ export default function DashboardPage() {
         {/* PANELS ROW */}
         <div className="flex items-center justify-between mt-2">
           <h2 className="text-sm font-bold text-gray-900">Configuración de Columnas para Exportación</h2>
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={() => toggleAllColumns(true)} 
+              className="text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-lg transition-colors border border-emerald-200 shadow-sm"
+            >
+              Marcar Todas
+            </button>
+            <button 
+              onClick={() => toggleAllColumns(false)} 
+              className="text-xs font-semibold text-gray-600 bg-white hover:bg-gray-50 px-3 py-1.5 rounded-lg transition-colors border border-gray-200 shadow-sm"
+            >
+              Desmarcar Todas
+            </button>
+          </div>
         </div>
         
         <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
@@ -783,6 +836,56 @@ export default function DashboardPage() {
                 Cerrar Visor
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Reintento */}
+      {showRetryModal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-md p-4">
+          <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-lg w-full text-center border border-white/20 animate-in zoom-in duration-300">
+            <div className="w-16 h-16 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-4">
+              <RefreshCw className="w-8 h-8" />
+            </div>
+            <h3 className="text-2xl font-bold text-gray-900 mb-2">Reintentar Análisis</h3>
+            <p className="mb-6 text-gray-600 text-sm leading-relaxed">
+              Selecciona cómo deseas volver a procesar las llaves guardadas para este análisis.
+            </p>
+            <div className="flex flex-col gap-3 justify-center mb-4 text-sm">
+              <button 
+                onClick={() => executeRetry(false, 'copy')}
+                className="w-full px-4 py-3 bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 shadow-lg shadow-indigo-600/30 transition-all active:scale-[0.98]"
+              >
+                Cargar Datos (Caché) y Copiar PDFs
+              </button>
+              <button 
+                onClick={() => executeRetry(false, 'scrape')}
+                className="w-full px-4 py-3 bg-emerald-600 text-white rounded-xl font-semibold hover:bg-emerald-700 shadow-lg shadow-emerald-600/30 transition-all active:scale-[0.98]"
+              >
+                Cargar Datos (Caché) y Re-descargar PDFs
+              </button>
+              <button 
+                onClick={() => executeRetry(false, 'ignore')}
+                className="w-full px-4 py-3 bg-slate-600 text-white rounded-xl font-semibold hover:bg-slate-700 shadow-lg shadow-slate-600/30 transition-all active:scale-[0.98]"
+              >
+                Solo Datos (Ignorar PDFs)
+              </button>
+              <button 
+                onClick={() => executeRetry(true, 'ignore')}
+                className="w-full px-4 py-3 bg-white border-2 border-amber-500 text-amber-600 rounded-xl font-semibold hover:bg-amber-50 transition-all active:scale-[0.98]"
+              >
+                Sobrescribir Datos SECOP (Ignorar PDFs)
+              </button>
+              <button 
+                onClick={() => executeRetry(true, 'scrape')}
+                className="w-full px-4 py-3 bg-white border-2 border-red-500 text-red-600 rounded-xl font-semibold hover:bg-red-50 transition-all active:scale-[0.98]"
+              >
+                Sobrescribir TODO desde SECOP (Lento)
+              </button>
+            </div>
+            <button onClick={() => setShowRetryModal(false)} className="text-sm text-gray-400 hover:text-gray-600 underline mt-2">
+              Cancelar
+            </button>
           </div>
         </div>
       )}

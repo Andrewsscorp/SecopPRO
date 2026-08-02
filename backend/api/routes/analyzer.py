@@ -11,7 +11,7 @@ import threading
 import pandas as pd
 
 from api.schemas import StartAnalysisResponse
-from workers.secop_worker import worker_process_entrypoint
+from workers.secop_worker import worker_process_entrypoint, worker_retry_process_entrypoint
 from database.database import get_db
 from database.models import ContratoAnalisis, CacheSecop, AnalisisRealizado
 
@@ -156,6 +156,45 @@ async def start_analysis(
     threading.Thread(target=process_queue_reader, args=(mp_queue, active_queues[job_id], loop), daemon=True).start()
     
     return {"job_id": job_id, "message": f"Análisis iniciado en proceso PID: {process.pid}"}
+
+from pydantic import BaseModel
+class RetryJobRequest(BaseModel):
+    job_id: str
+    force_secop: bool
+    pdf_strategy: str
+
+@router.post("/retry-job")
+async def retry_analysis(req: RetryJobRequest, db: Session = Depends(get_db)):
+    # Verificar si existe el análisis
+    analisis = db.query(AnalisisRealizado).filter(AnalisisRealizado.id == req.job_id).first()
+    if not analisis:
+        raise HTTPException(status_code=404, detail="El análisis no existe.")
+        
+    # Verificar si hay llaves para este análisis
+    llaves_count = db.query(ContratoAnalisis).filter(ContratoAnalisis.id_analisis == req.job_id).count()
+    if llaves_count == 0:
+        raise HTTPException(status_code=400, detail="No se encontraron llaves guardadas para reintentar este análisis.")
+        
+    # Borrar logs viejos del análisis (opcional, pero util para no mezclar)
+    from database.models import LogsServidor
+    db.query(LogsServidor).filter(LogsServidor.id_analisis == req.job_id).delete()
+    db.commit()
+
+    # Preparamos colas
+    if req.job_id not in active_queues:
+        active_queues[req.job_id] = asyncio.Queue()
+        
+    mp_queue = mp.Queue()
+    
+    process = mp.Process(target=worker_retry_process_entrypoint, args=(req.job_id, req.force_secop, req.pdf_strategy, mp_queue))
+    process.start()
+    
+    active_processes[req.job_id] = process
+    
+    loop = asyncio.get_running_loop()
+    threading.Thread(target=process_queue_reader, args=(mp_queue, active_queues[req.job_id], loop), daemon=True).start()
+    
+    return {"message": "Reintento iniciado", "job_id": req.job_id}
 
 @router.get("/stream/{job_id}")
 async def stream_progress(job_id: str):

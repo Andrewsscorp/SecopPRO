@@ -182,8 +182,20 @@ export default function MappingPage() {
                 Cargar Datos y Re-descargar PDFs (Rápido)
               </button>
               <button 
-                onClick={() => executeAnalysis(true, 'scrape')}
+                onClick={() => executeAnalysis(false, 'ignore')}
+                className="w-full px-4 py-3.5 bg-slate-600 text-white rounded-xl font-semibold hover:bg-slate-700 shadow-lg shadow-slate-600/30 transition-all active:scale-[0.98]"
+              >
+                Solo Datos (Ignorar PDFs - Súper Rápido)
+              </button>
+              <button 
+                onClick={() => executeAnalysis(true, 'ignore')}
                 className="w-full px-4 py-3.5 bg-white border-2 border-amber-500 text-amber-600 rounded-xl font-semibold hover:bg-amber-50 transition-all active:scale-[0.98]"
+              >
+                Sobrescribir Datos desde SECOP (Ignorar PDFs)
+              </button>
+              <button 
+                onClick={() => executeAnalysis(true, 'scrape')}
+                className="w-full px-4 py-3.5 bg-white border-2 border-red-500 text-red-600 rounded-xl font-semibold hover:bg-red-50 transition-all active:scale-[0.98]"
               >
                 Sobrescribir TODO desde SECOP (Lento)
               </button>

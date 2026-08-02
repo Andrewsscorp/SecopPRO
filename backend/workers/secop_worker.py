@@ -290,9 +290,14 @@ async def process_contract(
 
         # 3. Vincular Análisis
         if datos_finales:
-            vinculo = ContratoAnalisis(id_analisis=job_id, llave_busqueda=str(valor))
-            db.add(vinculo)
-            db.commit()
+            vinculo_existente = db.query(ContratoAnalisis).filter(
+                ContratoAnalisis.id_analisis == job_id,
+                ContratoAnalisis.llave_busqueda == str(valor)
+            ).first()
+            if not vinculo_existente:
+                vinculo = ContratoAnalisis(id_analisis=job_id, llave_busqueda=str(valor))
+                db.add(vinculo)
+                db.commit()
 
     except Exception as e:
         db.rollback()
@@ -310,6 +315,9 @@ def _resolve_secop_field(raw_secop_field: str) -> str:
 async def run_secop_extraction(
     job_id: str, config_data: dict, log_queue: asyncio.Queue, file_bytes: bytes,
     active_cancellations: set,
+    is_retry: bool = False,
+    retry_force_secop: bool = False,
+    retry_pdf_strategy: str = 'scrape'
 ):
     db = SessionLocal()
     loop = asyncio.get_running_loop()
@@ -317,48 +325,68 @@ async def run_secop_extraction(
     try:
         await log_queue.put({"type": "log", "message": "[INFO] Iniciando extracción asíncrona hacia DB Unificada...", "progress": 5})
 
-        mapped_columns = config_data.get('mappedColumns', [])
-        key_mapping = next((col for col in mapped_columns if col.get('isKey')), None)
-        
-        force_secop = config_data.get('forceSecop', False)
-        
-        if not key_mapping:
-            await log_queue.put({"type": "error", "message": "[ERROR] No se seleccionó Llave Primaria."})
-            return
+        if not is_retry:
+            mapped_columns = config_data.get('mappedColumns', [])
+            key_mapping = next((col for col in mapped_columns if col.get('isKey')), None)
+            
+            force_secop = config_data.get('forceSecop', False)
+            
+            if not key_mapping:
+                await log_queue.put({"type": "error", "message": "[ERROR] No se seleccionó Llave Primaria."})
+                return
 
-        excel_col = key_mapping['excelCol']
-        raw_secop_field = key_mapping['secopField'] or 'id_contrato'
-        secop_field = _resolve_secop_field(raw_secop_field)
-        sha256 = config_data.get('fileSha256', 'NO_HASH')
-        file_name = config_data.get('fileName', 'Documento.xlsx')
+            excel_col = key_mapping['excelCol']
+            raw_secop_field = key_mapping['secopField'] or 'id_contrato'
+            secop_field = _resolve_secop_field(raw_secop_field)
+            sha256 = config_data.get('fileSha256', 'NO_HASH')
+            file_name = config_data.get('fileName', 'Documento.xlsx')
 
-        await log_queue.put({"type": "log", "message": f"[OK] Llave validada: Socrata API -> '{secop_field}'", "progress": 15})
+            await log_queue.put({"type": "log", "message": f"[OK] Llave validada: Socrata API -> '{secop_field}'", "progress": 15})
 
-        try:
-            df = await loop.run_in_executor(None, lambda: pd.read_excel(io.BytesIO(file_bytes)))
-        except Exception as e:
-            await log_queue.put({"type": "error", "message": f"[ERROR] No se pudo leer el Excel: {e}"})
-            return
+            try:
+                df = await loop.run_in_executor(None, lambda: pd.read_excel(io.BytesIO(file_bytes)))
+            except Exception as e:
+                await log_queue.put({"type": "error", "message": f"[ERROR] No se pudo leer el Excel: {e}"})
+                return
 
-        valores_buscar = df[excel_col].dropna().astype(str).unique().tolist()
+            valores_buscar = df[excel_col].dropna().astype(str).unique().tolist()
+            
+            analisis_config = config_data.get('analysisConfig', {})
+            raw_name = analisis_config.get('name', '').strip()
+            
+            nuevo_analisis = AnalisisRealizado(
+                id=job_id,
+                nombre_analisis=raw_name,
+                sha256_archivo=sha256,
+                nombre_documento=file_name,
+                total_columnas=len(df.columns),
+                columna_escogida=excel_col,
+                estado=EstadoAnalisis.PROCESANDO,
+            )
+            db.add(nuevo_analisis)
+            db.commit()
+        else:
+            # Flujo de Reintento
+            force_secop = retry_force_secop
+            secop_field = "id_contrato" # Asumimos por defecto
+            
+            # Obtener llaves desde DB
+            llaves_db = db.query(ContratoAnalisis).filter(ContratoAnalisis.id_analisis == job_id).all()
+            if not llaves_db:
+                await log_queue.put({"type": "error", "message": "[ERROR] No hay llaves guardadas para este análisis."})
+                return
+            valores_buscar = [c.llave_busqueda for c in llaves_db]
+            
+            analisis_existente = db.query(AnalisisRealizado).filter(AnalisisRealizado.id == job_id).first()
+            if analisis_existente:
+                analisis_existente.estado = EstadoAnalisis.PROCESANDO
+                db.commit()
+
         total = len(valores_buscar)
         
         _log_db(db, job_id, f"Inicia análisis de {total} registros (Fuerza SECOP: {force_secop})")
 
-        analisis_config = config_data.get('analysisConfig', {})
-        raw_name = analisis_config.get('name', '').strip()
-        
-        nuevo_analisis = AnalisisRealizado(
-            id=job_id,
-            nombre_analisis=raw_name,
-            sha256_archivo=sha256,
-            nombre_documento=file_name,
-            total_columnas=len(df.columns),
-            columna_escogida=excel_col,
-            estado=EstadoAnalisis.PROCESANDO,
-        )
-        db.add(nuevo_analisis)
-        db.commit()
+
 
         ssl_context = _build_ssl_context()
         semaphore = asyncio.Semaphore(MAX_CONCURRENT_REQUESTS)
@@ -395,9 +423,13 @@ async def run_secop_extraction(
             await asyncio.gather(*tasks)
 
         # Scraper de Archivos
-        pdf_strategy = config_data.get('pdfStrategy', 'scrape') # "copy", "scrape", "ignore"
-        run_scraper = config_data.get('runScraper', True)
-        
+        if not is_retry:
+            pdf_strategy = config_data.get('pdfStrategy', 'scrape') # "copy", "scrape", "ignore"
+            run_scraper = config_data.get('runScraper', True)
+        else:
+            pdf_strategy = retry_pdf_strategy
+            run_scraper = True # Siempre corre scraper si no es ignore
+            
         if run_scraper and pdf_strategy != 'ignore':
             from services.pdf_scraper import download_pdfs_for_contract
             import shutil
@@ -472,6 +504,45 @@ async def run_secop_extraction(
                     except Exception as e:
                         await log_queue.put({"type": "log", "message": f"[ERROR SCRAPER] '{c.llave_busqueda}' falló ({e}); continuando."})
 
+        # --- NUEVO: PRE-FETCH DE HISTORIAL DE CONTRATISTAS ---
+        try:
+            from services.contractor_service import fetch_and_summarize_contractor
+            
+            # Recolectar todos los NITs únicos de los contratos procesados
+            contratos_para_nit = db.query(ContratoAnalisis).filter(ContratoAnalisis.id_analisis == job_id).all()
+            llaves_nit = [c.llave_busqueda for c in contratos_para_nit]
+            caches_nit = db.query(CacheSecop).filter(CacheSecop.llave_busqueda.in_(llaves_nit)).all()
+            
+            nits_unicos = set()
+            for c in caches_nit:
+                nit = getattr(c, 'documento_proveedor', None)
+                if nit and nit not in ("N/A", "vacía por el momento"):
+                    nits_unicos.add(nit)
+            
+            if nits_unicos:
+                await log_queue.put({"type": "log", "message": f"[FORENSE] Pre-cargando historial matemático de {len(nits_unicos)} contratistas...", "progress": 98})
+                
+                semaforo_prefetch = asyncio.Semaphore(5)
+                
+                async def _do_prefetch(nit_val):
+                    async with semaforo_prefetch:
+                        if job_id in active_cancellations:
+                            return
+                        await fetch_and_summarize_contractor(nit_val, db, force_secop=force_secop)
+                        await asyncio.sleep(0.1)
+                
+                tasks_prefetch = [_do_prefetch(n) for n in nits_unicos]
+                await asyncio.gather(*tasks_prefetch)
+                
+                await log_queue.put({"type": "log", "message": f"[FORENSE] Historial de contratistas guardado en DB exitosamente."})
+                _log_db(db, job_id, f"Historial forense pre-cargado para {len(nits_unicos)} NITs.")
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            await log_queue.put({"type": "log", "message": f"[AVISO] Falló el pre-fetch forense: {e}"})
+            _log_db(db, job_id, f"Error en pre-fetch forense: {e}", NivelLog.WARNING)
+        # -----------------------------------------------------
+
         end_time = time.time()
         
         analisis_final = db.query(AnalisisRealizado).filter(AnalisisRealizado.id == job_id).first()
@@ -509,4 +580,25 @@ def worker_process_entrypoint(job_id: str, config_data: dict, file_bytes: bytes,
             await run_secop_extraction(job_id, config_data, log_queue, file_bytes, set())
         except Exception as e:
             mp_queue.put({"type": "error", "message": f"Fallo crítico en Proceso: {e}"})
+    asyncio.run(main())
+
+def worker_retry_process_entrypoint(job_id: str, force_secop: bool, pdf_strategy: str, mp_queue):
+    import asyncio
+    async def main():
+        log_queue = asyncio.Queue()
+        async def forwarder():
+            while True:
+                msg = await log_queue.get()
+                mp_queue.put(msg)
+                if msg.get("type") in ("complete", "error"):
+                    break
+        asyncio.create_task(forwarder())
+        try:
+            # En reintento pasamos empty dict y None bytes
+            await run_secop_extraction(
+                job_id, {}, log_queue, None, set(), 
+                is_retry=True, retry_force_secop=force_secop, retry_pdf_strategy=pdf_strategy
+            )
+        except Exception as e:
+            mp_queue.put({"type": "error", "message": f"Fallo crítico en Proceso de Reintento: {e}"})
     asyncio.run(main())

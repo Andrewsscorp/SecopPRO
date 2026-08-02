@@ -7,9 +7,9 @@ import httpx
 import json
 import traceback
 
-router = APIRouter()
+from services.contractor_service import fetch_and_summarize_contractor
 
-SOCRATA_URL = "https://www.datos.gov.co/resource/jbjy-vk9h.json"
+router = APIRouter()
 
 def generate_ai_report(nombre_contratista: str, nit: str, resumen: dict, db: Session) -> str:
     reporte_ia = "La inteligencia artificial no está configurada para generar el reporte."
@@ -64,132 +64,27 @@ def generate_ai_report(nombre_contratista: str, nit: str, resumen: dict, db: Ses
 
 @router.get("/{nit}")
 async def get_contractor_report(nit: str, db: Session = Depends(get_db)):
-    # 1. Check Cache
-    cached = db.query(ContratacionTerceros).filter(ContratacionTerceros.documento == nit).first()
-    if cached:
-        # Lazy AI Loading: If it's cached but has no AI report (or has the default unconfigured message)
-        if not cached.reporte_ia or "no está configurada" in cached.reporte_ia or "**Error" in cached.reporte_ia:
-            print(f"Generando IA bajo demanda (Lazy Loading) para NIT {nit}")
-            cached.reporte_ia = generate_ai_report(cached.nombre, nit, cached.resumen_calculado, db)
-            db.commit()
-            
-        return {
-            "status": "success",
-            "source": "cache",
-            "documento": cached.documento,
-            "nombre": cached.nombre,
-            "resumen": cached.resumen_calculado,
-            "datos_completos": cached.datos_completos,
-            "reporte_ia": cached.reporte_ia
-        }
-
-    # 2. Fetch from Socrata
-    async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
-        # SECOP II main dataset
-        try:
-            resp = await client.get(SOCRATA_URL, params={"documento_proveedor": nit, "$limit": 5000})
-            if resp.status_code != 200:
-                raise HTTPException(status_code=502, detail="Error conectando a SECOP II (Socrata)")
-            data = resp.json()
-        except Exception as e:
-            raise HTTPException(status_code=502, detail=f"Fallo en la red hacia Socrata: {e}")
-
-    if not data:
+    # 1. Fetch from Cache or Socrata using the shared service
+    registro = await fetch_and_summarize_contractor(nit, db, force_secop=False)
+    
+    if not registro:
         raise HTTPException(status_code=404, detail="El contratista no tiene contratos registrados o el NIT es incorrecto.")
 
-    # 3. Process Data & Calculate Summary
-    nombre_contratista = data[0].get("proveedor_adjudicado", "Desconocido")
-    
-    total_contratos = len(data)
-    valor_total = 0.0
-    contratos_por_entidad = {}
-    contratos_por_anio = {}
-    
-    primer_contrato = None
-    ultimo_contrato = None
-    mayor_contrato = None
-    
-    min_date = None
-    max_date = None
-    max_val = -1.0
-    
-    for row in data:
-        objeto_str = row.get("descripcion_del_proceso", row.get("detalle_del_objeto_a_contratar", row.get("objeto_del_contrato", "No disponible")))
-        
-        # Valor
-        val_str = row.get("valor_del_contrato", row.get("valor_contrato", "0"))
-        try:
-            val = float(val_str)
-            valor_total += val
-            if val > max_val:
-                max_val = val
-                mayor_contrato = {
-                    "fecha": row.get("fecha_de_firma", ""),
-                    "valor": val,
-                    "motivo_objeto": objeto_str
-                }
-        except ValueError:
-            pass
-            
-        # Entidad
-        entidad = row.get("entidad", row.get("nombre_entidad", "Desconocida"))
-        contratos_por_entidad[entidad] = contratos_por_entidad.get(entidad, 0) + 1
-        
-        # Año y Fechas
-        fecha = row.get("fecha_de_firma", "")
-        if fecha and len(fecha) >= 10:
-            # Normalizar fecha aislando los primeros 10 caracteres YYYY-MM-DD
-            fecha_norm = fecha[:10]
-            anio = fecha_norm[:4]
-            contratos_por_anio[anio] = contratos_por_anio.get(anio, 0) + 1
-            
-            if not min_date or fecha_norm < min_date:
-                min_date = fecha_norm
-                primer_contrato = {
-                    "fecha": fecha_norm,
-                    "valor": val_str,
-                    "motivo_objeto": objeto_str
-                }
-            if not max_date or fecha_norm > max_date:
-                max_date = fecha_norm
-                ultimo_contrato = {
-                    "fecha": fecha_norm,
-                    "valor": val_str,
-                    "motivo_objeto": objeto_str
-                }
-
-    resumen = {
-        "total_contratos": total_contratos,
-        "valor_total": valor_total,
-        "entidades_top": dict(sorted(contratos_por_entidad.items(), key=lambda item: item[1], reverse=True)[:5]),
-        "contratos_por_anio": contratos_por_anio,
-        "hitos": {
-            "primer_contrato": primer_contrato,
-            "ultimo_contrato": ultimo_contrato,
-            "mayor_contrato": mayor_contrato
-        }
-    }
-
-    # 4. Generate AI Report (Groq)
-    reporte_ia = generate_ai_report(nombre_contratista, nit, resumen, db)
-
-    # 5. Save to Cache
-    nuevo_registro = ContratacionTerceros(
-        documento=nit,
-        nombre=nombre_contratista,
-        datos_completos=data,
-        resumen_calculado=resumen,
-        reporte_ia=reporte_ia
-    )
-    db.add(nuevo_registro)
-    db.commit()
+    # 2. Lazy AI Loading: Si está en caché pero no tiene reporte IA válido
+    is_cached_ai = True
+    if not registro.reporte_ia or "no está configurada" in registro.reporte_ia or "**Error" in registro.reporte_ia:
+        print(f"Generando IA bajo demanda (Lazy Loading) para NIT {nit}")
+        registro.reporte_ia = generate_ai_report(registro.nombre, nit, registro.resumen_calculado, db)
+        db.commit()
+        db.refresh(registro)
+        is_cached_ai = False
 
     return {
         "status": "success",
-        "source": "api",
-        "documento": nit,
-        "nombre": nombre_contratista,
-        "resumen": resumen,
-        "datos_completos": data,
-        "reporte_ia": reporte_ia
+        "source": "cache" if is_cached_ai else "api",
+        "documento": registro.documento,
+        "nombre": registro.nombre,
+        "resumen": registro.resumen_calculado,
+        "datos_completos": registro.datos_completos,
+        "reporte_ia": registro.reporte_ia
     }

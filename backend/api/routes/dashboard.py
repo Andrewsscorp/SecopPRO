@@ -2,7 +2,7 @@ import os
 from fastapi import APIRouter, Depends, Query, HTTPException, Body
 from sqlalchemy.orm import Session
 from database.database import get_db
-from database.models import ContratoAnalisis, CacheSecop, ResultadoOCR, PDFsConsulta, ContratacionTerceros
+from database.models import ContratoAnalisis, CacheSecop, ResultadoOCR, PDFsConsulta, ContratacionTerceros, AnalisisRealizado
 import pandas as pd
 import json
 import asyncio
@@ -22,6 +22,23 @@ def get_contratos_df(db: Session, job_id: str) -> pd.DataFrame:
     if not resultados:
         return pd.DataFrame()
         
+    llaves = [vinculo.llave_busqueda for vinculo, cache in resultados]
+    documentos = list({cache.documento_proveedor for vinculo, cache in resultados if cache.documento_proveedor})
+    
+    # Batch queries (Fix N+1 performance issue)
+    pdfs = db.query(PDFsConsulta).filter(PDFsConsulta.llave_busqueda.in_(llaves)).all()
+    pdf_dict = {pdf.llave_busqueda: pdf for pdf in pdfs}
+    
+    terceros = db.query(ContratacionTerceros).filter(ContratacionTerceros.documento.in_(documentos)).all()
+    tercero_dict = {t.documento: t for t in terceros}
+    
+    ocrs = db.query(ResultadoOCR).filter(ResultadoOCR.llave_busqueda.in_(llaves)).all()
+    ocr_dict = {}
+    for ocr in ocrs:
+        if ocr.llave_busqueda not in ocr_dict:
+            ocr_dict[ocr.llave_busqueda] = []
+        ocr_dict[ocr.llave_busqueda].append(ocr)
+        
     data_list = []
     for vinculo, cache in resultados:
         row = {c.name: getattr(cache, c.name) for c in cache.__table__.columns if c.name != 'datos_adicionales'}
@@ -31,11 +48,10 @@ def get_contratos_df(db: Session, job_id: str) -> pd.DataFrame:
         row['llave_busqueda'] = vinculo.llave_busqueda
         
         # --- Adjuntar Info de PDFsConsulta ---
-        pdf_info = db.query(PDFsConsulta).filter(PDFsConsulta.llave_busqueda == vinculo.llave_busqueda).first()
+        pdf_info = pdf_dict.get(vinculo.llave_busqueda)
         if pdf_info:
             row['cantidad_documentos_pdf'] = pdf_info.cantidad_pdfs
             row['nombre_pdf'] = ", ".join(pdf_info.lista_pdfs) if pdf_info.lista_pdfs else "No encontrado"
-            # Tomar las llaves del sha256
             row['sha_pdf'] = ", ".join([f"{k}: {v}" for k, v in pdf_info.sha256_pdfs.items()]) if pdf_info.sha256_pdfs else "No encontrado"
         else:
             row['cantidad_documentos_pdf'] = 0
@@ -43,7 +59,7 @@ def get_contratos_df(db: Session, job_id: str) -> pd.DataFrame:
             row['sha_pdf'] = "No encontrado"
             
         # --- Adjuntar Info de Terceros ---
-        tercero_info = db.query(ContratacionTerceros).filter(ContratacionTerceros.documento == cache.documento_proveedor).first()
+        tercero_info = tercero_dict.get(cache.documento_proveedor)
         if tercero_info and tercero_info.resumen_calculado:
             row['total_contratos'] = tercero_info.resumen_calculado.get("total_contratos", "No calculado")
             row['valor_total_contratos'] = tercero_info.resumen_calculado.get("valor_total_contratos", "No calculado")
@@ -61,15 +77,14 @@ def get_contratos_df(db: Session, job_id: str) -> pd.DataFrame:
             row.update(vinculo.hallazgos_ocr)
             
         # Traer los Resultados OCR relacionales más recientes
-        ocr_results = db.query(ResultadoOCR).filter(ResultadoOCR.llave_busqueda == vinculo.llave_busqueda).all()
-        if ocr_results:
-            for ocr in ocr_results:
-                col_name = f"Resultado OCR {ocr.palabra_clave}"
-                texto = f"Contexto Previo: {ocr.contexto_previo}\n\nCoincidencia: {ocr.bloque_coincidencia}\n\nContexto Posterior: {ocr.contexto_posterior}"
-                if col_name in row and row[col_name]:
-                    row[col_name] += f"\n\n--- OTRO HALLAZGO ---\n\n{texto}"
-                else:
-                    row[col_name] = texto
+        ocr_results = ocr_dict.get(vinculo.llave_busqueda, [])
+        for ocr in ocr_results:
+            col_name = f"Resultado OCR {ocr.palabra_clave}"
+            texto = f"Contexto Previo: {ocr.contexto_previo}\n\nCoincidencia: {ocr.bloque_coincidencia}\n\nContexto Posterior: {ocr.contexto_posterior}"
+            if col_name in row and row[col_name]:
+                row[col_name] += f"\n\n--- OTRO HALLAZGO ---\n\n{texto}"
+            else:
+                row[col_name] = texto
             
         data_list.append(row)
         
@@ -176,3 +191,50 @@ async def run_dashboard_ocr(
                 db.commit()
                 
     return {"message": "OCR finalizado", "matches_found": len(resultados_totales), "details": resultados_totales}
+
+@router.get("/history")
+def get_dashboard_history(limit: int = 10, offset: int = 0, db: Session = Depends(get_db)):
+    """
+    Retorna el historial de todos los análisis realizados (Auditorías masivas) con paginación.
+    """
+    total = db.query(AnalisisRealizado).count()
+    historial = db.query(AnalisisRealizado).order_by(AnalisisRealizado.hora_inicio.desc()).offset(offset).limit(limit).all()
+    
+    resultados = []
+    for h in historial:
+        # Calcular llaves reales procesadas
+        llaves_count = db.query(ContratoAnalisis).filter(ContratoAnalisis.id_analisis == h.id).count()
+        
+        resultados.append({
+            "id": h.id,
+            "nombre_analisis": h.nombre_analisis or h.nombre_documento,
+            "archivo_origen": h.nombre_documento,
+            "hora_inicio": h.hora_inicio.isoformat() if h.hora_inicio else None,
+            "tiempo_respuesta": h.tiempo_respuesta,
+            "estado": h.estado.value if hasattr(h.estado, 'value') else h.estado,
+            "cantidad_llaves": llaves_count
+        })
+        
+    return {"data": resultados, "total": total}
+
+@router.post("/open-folder")
+def open_job_folder(payload: dict = Body(...)):
+    import os
+    import sys
+    import subprocess
+    job_id = payload.get("jobId")
+    if not job_id:
+        raise HTTPException(status_code=400, detail="Falta jobId")
+        
+    user_docs = os.path.join(os.path.expanduser('~'), 'Documents', 'SecopPRO_Consul', job_id)
+    if not os.path.exists(user_docs):
+        raise HTTPException(status_code=404, detail="La carpeta no existe.")
+        
+    if sys.platform == 'win32':
+        os.startfile(user_docs)
+    elif sys.platform == 'darwin':
+        subprocess.Popen(['open', user_docs])
+    else:
+        subprocess.Popen(['xdg-open', user_docs])
+        
+    return {"message": "Carpeta abierta exitosamente."}

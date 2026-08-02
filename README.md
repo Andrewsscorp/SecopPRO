@@ -65,7 +65,7 @@ El proyecto cuenta con una arquitectura Full-Stack moderna y desacoplada:
 ---
 
 ## 📜 Control de Versiones
-Revisar el archivo `CHANGELOG.md` para visualizar el registro histórico de mejoras y parches bajo el formato **Semantic Versioning (SemVer)**. La versión actual es la **2.4.0**, destacando el **Motor de Reinicio Fantasma Multiplataforma**, un script agnóstico que gestiona bloqueos de puertos y Docker, junto con el **Exportador Masivo Excel Multi-Hoja (SOQL)** para extracción de historiales a gran escala sin consumir la cuota de la IA.
+Revisar el archivo `CHANGELOG.md` para visualizar el registro histórico de mejoras y parches bajo el formato **Semantic Versioning (SemVer)**. La versión actual es la **2.5.0**, destacando la **Arquitectura de Reintento en Caliente**, un sistema robusto que permite reconectar, paginar y relanzar análisis pasados directamente desde la base de datos sin necesidad del archivo Excel, y el **Motor de Caché Vectorizado** que redujo tiempos de carga de tableros de 40 a 0.5 segundos al mitigar el problema N+1.
 
 ---
 > *"Diseñado con precisión algorítmica y excelencia estética."* - **SecopPRO**
