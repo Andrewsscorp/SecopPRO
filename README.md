@@ -64,8 +64,8 @@ El proyecto cuenta con una arquitectura Full-Stack moderna y desacoplada:
 
 ---
 
-## 📜 Control de Versiones
-Revisar el archivo `CHANGELOG.md` para visualizar el registro histórico de mejoras y parches bajo el formato **Semantic Versioning (SemVer)**. La versión actual es la **2.5.0**, destacando la **Arquitectura de Reintento en Caliente**, un sistema robusto que permite reconectar, paginar y relanzar análisis pasados directamente desde la base de datos sin necesidad del archivo Excel, y el **Motor de Caché Vectorizado** que redujo tiempos de carga de tableros de 40 a 0.5 segundos al mitigar el problema N+1.
+## 🏷️ Control de Versiones
+Revisar el archivo `CHANGELOG.md` para visualizar el registro histórico de mejoras y parches bajo el formato **Semantic Versioning (SemVer)**. La versión actual es la **2.6.0**, destacando el nuevo **Scraper Híbrido (Extracción Forense de Anexos)** con interfaz nativa y buscador integrado, y la **Resolución Inteligente de Reglas** vía RAG para auditar fechas directamente desde los PDFs extraídos.
 
 ---
 > *"Diseñado con precisión algorítmica y excelencia estética."* - **SecopPRO**

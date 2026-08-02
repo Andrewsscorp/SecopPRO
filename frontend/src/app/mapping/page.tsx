@@ -49,11 +49,9 @@ export default function MappingPage() {
 
       if (checkRes.ok) {
         const checkData = await checkRes.json();
-        if (checkData.cached_count > 0) {
-            setCacheStats({ cached: checkData.cached_count, total: checkData.total_count, cached_pdfs: checkData.cached_pdfs_count || 0 });
-            setShowCacheModal(true);
-            return; // Pausamos ejecución hasta que el usuario decida
-        }
+        setCacheStats({ cached: checkData.cached_count || 0, total: checkData.total_count || 0, cached_pdfs: checkData.cached_pdfs_count || 0 });
+        setShowCacheModal(true);
+        return; // Pausamos ejecución hasta que el usuario decida
       }
       
       // Si no hay respuesta del check o es 0, ejecutamos con forceSecop = false

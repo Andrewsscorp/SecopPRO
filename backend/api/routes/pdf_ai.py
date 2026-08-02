@@ -2,16 +2,19 @@ import json
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+from typing import List, Optional
 from services.pdf_ai_service import (
     PdfAiService, 
     get_cover_instruction, 
     get_executive_summary_instruction, 
     get_results_instruction, 
     get_comparisons_instruction, 
-    get_graphics_instruction
+    get_graphics_instruction,
+    get_contractors_instruction,
+    get_conclusions_instruction
 )
 from database.database import SessionLocal
-from database.models import PdfAiCache
+from database.models import PdfAiCache, AuditoriaSistema, CacheSecop, ContratoAnalisis
 from datetime import datetime
 
 router = APIRouter()
@@ -20,14 +23,66 @@ pdf_ai_service = PdfAiService()
 class GenerateAiRequest(BaseModel):
     job_id: str
     profundidad: str = "medio" # basico, medio, profundo
+    force_regenerate: bool = False
+    selected_nits: Optional[List[str]] = None
 
-def stream_and_cache(job_id: str, field: str, instruction: str, profundidad: str = "medio", payload_getter=None):
+@router.get("/check-cache/{job_id}")
+def check_cache(job_id: str):
+    db = SessionLocal()
+    try:
+        cache = db.query(PdfAiCache).filter(PdfAiCache.job_id == job_id).first()
+        if not cache:
+            return {"exists": False}
+        return {
+            "exists": True,
+            "portada": cache.portada,
+            "resumen": cache.resumen,
+            "resultados": cache.resultados,
+            "comparaciones": cache.comparaciones,
+            "graficos": cache.graficos,
+            "adjudicatarios": cache.adjudicatarios,
+            "conclusiones": cache.conclusiones,
+            "tokens_usados": cache.tokens_usados
+        }
+    finally:
+        db.close()
+
+@router.get("/contractors/{job_id}")
+def get_job_contractors(job_id: str):
+    db = SessionLocal()
+    try:
+        contratos = db.query(CacheSecop).join(
+            ContratoAnalisis, ContratoAnalisis.llave_busqueda == CacheSecop.llave_busqueda
+        ).filter(ContratoAnalisis.id_analisis == job_id).all()
+        
+        nits_vistos = set()
+        result = []
+        for c in contratos:
+            if c.documento_proveedor and c.documento_proveedor not in nits_vistos:
+                nits_vistos.add(c.documento_proveedor)
+                result.append({
+                    "nit": c.documento_proveedor,
+                    "nombre": c.proveedor_adjudicado or "Desconocido",
+                    "valor": c.valor_del_contrato
+                })
+        # Ordenar de mayor a menor valor (opcional, ayuda visualmente)
+        def parse_val(val_str):
+            try:
+                return float(str(val_str).replace(",", "").replace(".", "").strip())
+            except:
+                return 0.0
+        result.sort(key=lambda x: parse_val(x["valor"]), reverse=True)
+        return {"contractors": result}
+    finally:
+        db.close()
+
+def stream_and_cache(job_id: str, field: str, instruction: str, profundidad: str = "medio", payload_getter=None, force_regenerate: bool = False):
     db = SessionLocal()
     
     # 1. Check Cache
     try:
         cache = db.query(PdfAiCache).filter(PdfAiCache.job_id == job_id).first()
-        if cache:
+        if cache and not force_regenerate:
             cached_content = getattr(cache, field)
             if cached_content:
                 # Retornar con un efecto de máquina de escribir artificial para simular a la IA
@@ -42,6 +97,14 @@ def stream_and_cache(job_id: str, field: str, instruction: str, profundidad: str
                 
                 yield "data: " + json.dumps({"usage": {"totalTokenCount": cache.tokens_usados, "cached": True}}) + "\n\n"
                 return
+        elif cache and force_regenerate:
+            # Auditar sobreescritura
+            auditoria = AuditoriaSistema(
+                accion="Sobreescritura de PDF AI",
+                detalles={"campo_sobreescrito": field, "nivel_profundidad": profundidad, "job_id": job_id}
+            )
+            db.add(auditoria)
+            db.commit()
     except Exception as e:
         print("Error checking cache:", e)
 
@@ -105,7 +168,7 @@ def stream_and_cache(job_id: str, field: str, instruction: str, profundidad: str
 def generate_cover(req: GenerateAiRequest):
     instruction = get_cover_instruction(req.profundidad)
     return StreamingResponse(
-        stream_and_cache(req.job_id, "portada", instruction, req.profundidad, pdf_ai_service.get_cover_payload),
+        stream_and_cache(req.job_id, "portada", instruction, req.profundidad, pdf_ai_service.get_cover_payload, req.force_regenerate),
         media_type="text/event-stream"
     )
 
@@ -113,7 +176,7 @@ def generate_cover(req: GenerateAiRequest):
 def generate_executive_summary(req: GenerateAiRequest):
     instruction = get_executive_summary_instruction(req.profundidad)
     return StreamingResponse(
-        stream_and_cache(req.job_id, "resumen", instruction, req.profundidad),
+        stream_and_cache(req.job_id, "resumen", instruction, req.profundidad, None, req.force_regenerate),
         media_type="text/event-stream"
     )
 
@@ -121,7 +184,7 @@ def generate_executive_summary(req: GenerateAiRequest):
 def generate_results(req: GenerateAiRequest):
     instruction = get_results_instruction(req.profundidad)
     return StreamingResponse(
-        stream_and_cache(req.job_id, "resultados", instruction, req.profundidad),
+        stream_and_cache(req.job_id, "resultados", instruction, req.profundidad, None, req.force_regenerate),
         media_type="text/event-stream"
     )
 
@@ -131,7 +194,7 @@ def generate_comparisons(req: GenerateAiRequest):
     payload = pdf_ai_service.get_contracts_payload(req.job_id, req.profundidad)
     final_instruction = get_comparisons_instruction(payload, req.profundidad)
     return StreamingResponse(
-        stream_and_cache(req.job_id, "comparaciones", final_instruction, req.profundidad),
+        stream_and_cache(req.job_id, "comparaciones", final_instruction, req.profundidad, None, req.force_regenerate),
         media_type="text/event-stream"
     )
 
@@ -139,7 +202,72 @@ def generate_comparisons(req: GenerateAiRequest):
 def generate_graphics(req: GenerateAiRequest):
     instruction = get_graphics_instruction(req.profundidad)
     return StreamingResponse(
-        stream_and_cache(req.job_id, "graficos", instruction, req.profundidad),
+        stream_and_cache(req.job_id, "graficos", instruction, req.profundidad, None, req.force_regenerate),
         media_type="text/event-stream"
     )
 
+@router.post("/generate-contractors")
+def generate_contractors(req: GenerateAiRequest):
+    instruction = get_contractors_instruction(req.profundidad)
+    payload_getter = lambda jid: pdf_ai_service.get_contractors_payload(jid, selected_nits=req.selected_nits)
+    return StreamingResponse(
+        stream_and_cache(req.job_id, "adjudicatarios", instruction, req.profundidad, payload_getter, req.force_regenerate),
+        media_type="text/event-stream"
+    )
+
+@router.post("/generate-conclusions")
+def generate_conclusions(req: GenerateAiRequest):
+    instruction = get_conclusions_instruction(req.profundidad)
+    return StreamingResponse(
+        stream_and_cache(req.job_id, "conclusiones", instruction, req.profundidad, pdf_ai_service.get_conclusions_payload, req.force_regenerate),
+        media_type="text/event-stream"
+    )
+
+@router.post("/generate-anexos")
+def generate_anexos(req: GenerateAiRequest):
+    from services.pdf_ai_service import get_anexos_instruction, get_anexos_payload
+    instruction = get_anexos_instruction(req.profundidad)
+    return StreamingResponse(
+        stream_and_cache(req.job_id, "anexos", instruction, req.profundidad, get_anexos_payload, req.force_regenerate),
+        media_type="text/event-stream"
+    )
+
+class ResolveRuleRequest(BaseModel):
+    job_id: str
+    llave_busqueda: str
+    regla: str
+
+@router.post("/resolve-rule")
+def resolve_rule(req: ResolveRuleRequest):
+    from services.rule_resolver import SmartRuleResolver
+    resolver = SmartRuleResolver()
+    result = resolver.resolve_rule(req.job_id, req.llave_busqueda, req.regla)
+    if result.get("status") == "error":
+        raise HTTPException(status_code=400, detail=result.get("message"))
+    return result
+
+class RunScraperRequest(BaseModel):
+    job_id: str
+    llave_busqueda: str
+    urlproceso: str
+    descargar_archivos: bool = True
+
+@router.post("/run-scraper")
+async def run_scraper(req: RunScraperRequest):
+    import asyncio
+    from services.pdf_scraper_v2 import download_pdfs_for_contract_v2
+    
+    log_queue = asyncio.Queue()
+    
+    try:
+        # Run the scraper asynchronously
+        result = await download_pdfs_for_contract_v2(
+            job_id=req.job_id,
+            llave=req.llave_busqueda,
+            urlproceso=req.urlproceso,
+            log_queue=log_queue,
+            descargar_archivos=req.descargar_archivos
+        )
+        return {"status": "success", "message": "Scraper ejecutado correctamente.", "data": result}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error en scraper: {str(e)}")

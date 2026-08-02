@@ -12,7 +12,16 @@ Usamos el formato `X.Y.Z` (Ejemplo: `2.1.0`):
 
 ---
 
-## [2.5.0] - 2026-08-01 (Actual)
+## [2.6.0] - 2026-08-02 (Actual)
+### ✨ Nuevas Funcionalidades (Features)
+- **Scraper Híbrido de Anexos (Forensics):** Nueva arquitectura de extracción profunda que permite descargar anexos físicos para calcular su `SHA256` o hacer una extracción rápida (solo nombres) de forma secuencial, protegiendo la memoria del servidor.
+- **Buscador de Extracción (ScraperControlModal):** Interfaz nativa conectada a la base de datos para buscar, filtrar (por estado y cuantía) y seleccionar múltiples contratos para extraer sus anexos simultáneamente sin ventanas emergentes de SO.
+- **Smart Rule Validator (RAG):** Integración de un modelo para comparar reglas lógicas (Ej. Fecha de firma vs publicación) utilizando procesamiento de lenguaje natural y extracción inteligente sobre PDFs previamente scrapeados.
+
+### 🐛 Correcciones (Bug Fixes)
+- **Bloqueo del Modal de Caché:** Se eliminó la condicional estricta del caché. Ahora las 5 opciones principales de procesamiento (Ignorar PDFs, Re-descargar, Sobrescribir) aparecen siempre para dar control absoluto al analista incluso en Excel sin caché previa.
+
+## [2.5.0] - 2026-08-01
 ### ✨ Nuevas Funcionalidades (Features)
 - **Reintento de Análisis en Caliente:** Nueva arquitectura para volver a procesar análisis masivos desde la base de datos sin necesitar el archivo de Excel original, con un nuevo endpoint `/api/retry-job` impulsado por colas asíncronas de Python (`multiprocessing.Queue`).
 - **Vista de Historial de Consultas:** Creación del dashboard `documents/page.tsx` para listar con paginación los análisis previos, con capacidades de retomar el procesamiento directo en tiempo real.

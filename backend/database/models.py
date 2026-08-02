@@ -142,6 +142,7 @@ class ContratoAnalisis(Base):
     llave_busqueda = Column(String, ForeignKey("cache_secop.llave_busqueda"))
     # Solo datos que varían por análisis (ej. hallazgos OCR específicos)
     hallazgos_ocr = Column(JSON) 
+    rag_resolutions = Column(JSON, nullable=True) # Resolución inteligente de reglas faltantes
 
 class PdfAiCache(Base):
     """Caché de resultados generados por IA para el PDF Exporter"""
@@ -152,10 +153,12 @@ class PdfAiCache(Base):
     resultados = Column(String, nullable=True)
     comparaciones = Column(String, nullable=True)
     graficos = Column(String, nullable=True)
+    adjudicatarios = Column(String, nullable=True)
+    conclusiones = Column(String, nullable=True)
+    anexos = Column(String, nullable=True)
     tokens_estimados = Column(Integer, default=0)
     tokens_usados = Column(Integer, default=0)
     fecha_generacion = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
 class ResultadoOCR(Base):
     """Resultados relacionales del análisis forense de OCR"""
     __tablename__ = "resultados_ocr"

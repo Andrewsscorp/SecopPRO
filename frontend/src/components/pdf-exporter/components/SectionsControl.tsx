@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { usePdfExporterStore, SectionId, SectionItem } from '../store';
-import { GripVertical, Check, Settings, Bot, Loader2, Sparkles } from 'lucide-react';
+import { GripVertical, Check, Settings, Bot, Loader2, Sparkles, Users, X, DownloadCloud } from 'lucide-react';
 import { toast } from 'sonner';
+import ScraperControlModal from '../../modals/ScraperControlModal';
 
 interface SectionsControlProps {
   jobId: string;
@@ -17,6 +18,15 @@ export const SectionsControl: React.FC<SectionsControlProps> = ({ jobId }) => {
   
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [openSettingsId, setOpenSettingsId] = useState<string | null>(null);
+  
+  // Estado para el modal de Adjudicatarios
+  const [showContractorsModal, setShowContractorsModal] = useState(false);
+  const [availableContractors, setAvailableContractors] = useState<any[]>([]);
+  const [loadingContractors, setLoadingContractors] = useState(false);
+  const { selectedContractors, setSelectedContractors } = usePdfExporterStore();
+  
+  // Estado para el modal de Scraper
+  const [showScraperModal, setShowScraperModal] = useState(false);
 
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>, index: number) => {
     setDraggedIndex(index);
@@ -48,8 +58,70 @@ export const SectionsControl: React.FC<SectionsControlProps> = ({ jobId }) => {
     setSections(newSections);
   };
 
+  // Precargar caché al montar
+  useEffect(() => {
+    if (!jobId) return;
+    
+    // Limpiar estado para evitar mezclar datos de distintos análisis
+    setGeneratedAiContent({
+      portada: null,
+      resumen: null,
+      resultados: null,
+      comparaciones: null,
+      graficos: null,
+      adjudicatarios: null,
+      conclusiones: null,
+      anexos: null
+    });
+    setTokensUsados(0);
+
+    fetch(`http://localhost:8000/api/pdf/check-cache/${jobId}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.exists) {
+          const contentToUpdate: Record<string, string> = {};
+          if (data.portada) contentToUpdate.portada = data.portada;
+          if (data.resumen) contentToUpdate.resumen = data.resumen;
+          if (data.resultados) contentToUpdate.resultados = data.resultados;
+          if (data.comparaciones) contentToUpdate.comparaciones = data.comparaciones;
+          if (data.graficos) contentToUpdate.graficos = data.graficos;
+          if (data.adjudicatarios) contentToUpdate.adjudicatarios = data.adjudicatarios;
+          if (data.conclusiones) contentToUpdate.conclusiones = data.conclusiones;
+          if (data.anexos) contentToUpdate.anexos = data.anexos;
+          
+          setGeneratedAiContent(contentToUpdate);
+          
+          if (data.tokens_usados) {
+            setTokensUsados(data.tokens_usados);
+          }
+        }
+      })
+      .catch(err => console.error("Error comprobando caché:", err));
+  }, [jobId]);
+
   const handleGenerate = async (sectionId: string, profundidad: string) => {
     setOpenSettingsId(null);
+    
+    if (sectionId === 'conclusiones') {
+      const st = usePdfExporterStore.getState();
+      const hasContent = st.generatedAiContent.resumen || st.generatedAiContent.resultados || st.generatedAiContent.comparaciones || st.generatedAiContent.adjudicatarios;
+      if (!hasContent) {
+        toast.error('Debes generar al menos un módulo previo (Resumen, Comparaciones, etc.) para que la IA tenga contexto para concluir.');
+        return;
+      }
+    }
+
+    const existingContent = (usePdfExporterStore.getState().generatedAiContent as any)[sectionId];
+    let force_regenerate = false;
+    
+    if (existingContent) {
+        const confirmMsg = "Ya existe un análisis generado en la base de datos para este bloque.\n\n¿Seguro que deseas sobreescribirlo generando uno nuevo?\n(Se consumirán tokens de IA)";
+        if (!window.confirm(confirmMsg)) {
+            return;
+        }
+        force_regenerate = true;
+    }
+    
     try {
       setIsGeneratingAI(sectionId as SectionId, true);
       toast.loading(`Generando análisis para ${sectionId}...`, { id: `ai-${sectionId}` });
@@ -59,16 +131,24 @@ export const SectionsControl: React.FC<SectionsControlProps> = ({ jobId }) => {
         'resumen': 'generate-executive-summary',
         'resultados': 'generate-results',
         'comparaciones': 'generate-comparisons',
-        'graficos': 'generate-graphics'
+        'graficos': 'generate-graphics',
+        'adjudicatarios': 'generate-contractors',
+        'conclusiones': 'generate-conclusions',
+        'anexos': 'generate-anexos'
       };
 
       const endpoint = endpoints[sectionId];
       if (!endpoint) return;
       
+      const payload: any = { job_id: jobId, profundidad, force_regenerate };
+      if (sectionId === 'adjudicatarios') {
+        payload.selected_nits = usePdfExporterStore.getState().selectedContractors;
+      }
+
       const res = await fetch(`http://localhost:8000/api/pdf/${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ job_id: jobId, profundidad })
+        body: JSON.stringify(payload)
       });
       
       if (!res.ok || !res.body) throw new Error(`Error en el stream de ${sectionId}`);
@@ -129,7 +209,7 @@ export const SectionsControl: React.FC<SectionsControlProps> = ({ jobId }) => {
     }
   };
 
-  const aiCapableSections = ['portada', 'resumen', 'resultados', 'comparaciones', 'graficos'];
+  const aiCapableSections = ['portada', 'resumen', 'resultados', 'comparaciones', 'graficos', 'adjudicatarios', 'conclusiones', 'anexos'];
 
   return (
     <div className="mb-6">
@@ -181,13 +261,43 @@ export const SectionsControl: React.FC<SectionsControlProps> = ({ jobId }) => {
                       Generando
                     </div>
                   ) : (
-                    <button 
-                      onClick={() => setOpenSettingsId(openSettingsId === section.id ? null : section.id)}
-                      className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
-                      title="Analizar con Inteligencia Artificial"
-                    >
-                      <Settings className="w-4 h-4" />
-                    </button>
+                      <div className="flex items-center gap-1">
+                      {section.id === 'anexos' && (
+                        <button 
+                          onClick={() => setShowScraperModal(true)}
+                          className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-md transition-colors"
+                          title="Abrir Buscador de Anexos (Scraper)"
+                        >
+                          <DownloadCloud className="w-4 h-4" />
+                        </button>
+                      )}
+                      {section.id === 'adjudicatarios' && (
+                        <button 
+                          onClick={() => {
+                            setShowContractorsModal(true);
+                            if (availableContractors.length === 0) {
+                              setLoadingContractors(true);
+                              fetch(`http://localhost:8000/api/pdf/contractors/${jobId}`)
+                                .then(res => res.json())
+                                .then(data => setAvailableContractors(data.contractors || []))
+                                .catch(err => console.error(err))
+                                .finally(() => setLoadingContractors(false));
+                            }
+                          }}
+                          className={`p-1.5 rounded-md transition-colors ${selectedContractors.length > 0 ? 'text-emerald-600 bg-emerald-50 hover:bg-emerald-100' : 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50'}`}
+                          title="Filtrar Adjudicatarios"
+                        >
+                          <Users className="w-4 h-4" />
+                        </button>
+                      )}
+                      <button 
+                        onClick={() => setOpenSettingsId(openSettingsId === section.id ? null : section.id)}
+                        className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                        title="Analizar con Inteligencia Artificial"
+                      >
+                        <Settings className="w-4 h-4" />
+                      </button>
+                    </div>
                   )}
 
                   {openSettingsId === section.id && !isGenerating && (
@@ -229,6 +339,100 @@ export const SectionsControl: React.FC<SectionsControlProps> = ({ jobId }) => {
           </div>
         </div>
       )}
+
+      {/* Modal de Selección de Adjudicatarios */}
+      {showContractorsModal && (
+        <div className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden flex flex-col max-h-[80vh]">
+            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+              <div>
+                <h3 className="font-semibold text-slate-800 flex items-center gap-2">
+                  <Users className="w-4 h-4 text-emerald-600" />
+                  Filtrar Adjudicatarios a Analizar
+                </h3>
+                <p className="text-xs text-slate-500 mt-1">Si no seleccionas ninguno, se analizarán los 10 con mayor cuantía por defecto.</p>
+              </div>
+              <button onClick={() => setShowContractorsModal(false)} className="text-slate-400 hover:text-slate-600 p-1">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-4 flex gap-2 border-b border-slate-100">
+              <button 
+                onClick={() => setSelectedContractors(availableContractors.map(c => c.nit))}
+                className="text-xs font-medium px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors"
+              >
+                Seleccionar Todos
+              </button>
+              <button 
+                onClick={() => setSelectedContractors([])}
+                className="text-xs font-medium px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors"
+              >
+                Limpiar
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-2">
+              {loadingContractors ? (
+                <div className="flex items-center justify-center py-12 gap-2 text-slate-500">
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <span className="text-sm">Cargando contratistas...</span>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  {availableContractors.map((c, idx) => (
+                    <label key={idx} className="flex items-start gap-3 p-3 hover:bg-slate-50 rounded-lg cursor-pointer transition-colors border border-transparent hover:border-slate-100">
+                      <div className="flex-shrink-0 mt-0.5">
+                        <input 
+                          type="checkbox" 
+                          className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                          checked={selectedContractors.includes(c.nit)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedContractors([...selectedContractors, c.nit]);
+                            } else {
+                              setSelectedContractors(selectedContractors.filter(nit => nit !== c.nit));
+                            }
+                          }}
+                        />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-slate-800 line-clamp-1">{c.nombre}</p>
+                        <div className="flex items-center gap-3 mt-1 text-xs text-slate-500">
+                          <span>NIT: {c.nit}</span>
+                          <span>&bull;</span>
+                          <span className="font-mono text-emerald-600">
+                            ${Number(c.valor.toString().replace(/,/g, '').replace(/\./g, '')).toLocaleString('es-CO')}
+                          </span>
+                        </div>
+                      </div>
+                    </label>
+                  ))}
+                  {availableContractors.length === 0 && !loadingContractors && (
+                    <p className="text-center text-sm text-slate-500 py-8">No se encontraron contratistas.</p>
+                  )}
+                </div>
+              )}
+            </div>
+            
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end">
+              <button 
+                onClick={() => setShowContractorsModal(false)}
+                className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg shadow-sm transition-colors"
+              >
+                Guardar Selección ({selectedContractors.length})
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal del Scraper de Anexos */}
+      <ScraperControlModal
+        isOpen={showScraperModal}
+        onClose={() => setShowScraperModal(false)}
+        jobId={jobId}
+      />
     </div>
   );
 };

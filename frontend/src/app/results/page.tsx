@@ -13,6 +13,7 @@ import { useDashboardStore } from '@/store/useDashboardStore';
 import HackerOverlay from '@/components/loading/HackerOverlay';
 import ContractorReportModal from '@/components/modals/ContractorReportModal';
 import ColumnConfigModal from '@/components/modals/ColumnConfigModal';
+import SmartRuleValidatorModal from '@/components/modals/SmartRuleValidatorModal';
 import { PdfExporterModal, usePdfExporterStore } from '@/components/pdf-exporter';
 
 const COLUMNS_CONFIG_TABLE: Record<string, { title: string, filterKey?: string, minWidth: string, render: (row: any, actions: any) => React.ReactNode }> = {
@@ -132,6 +133,7 @@ export default function DashboardPage() {
   const [isTableExpanded, setIsTableExpanded] = useState(false);
   const [selectedNit, setSelectedNit] = useState<string | null>(null);
   const [showColumnConfigModal, setShowColumnConfigModal] = useState(false);
+  const [showSmartRuleModal, setShowSmartRuleModal] = useState(false);
   const [showRetryModal, setShowRetryModal] = useState(false);
   const [retrying, setRetrying] = useState(false);
   
@@ -531,7 +533,15 @@ export default function DashboardPage() {
           {/* Panel 3 */}
           <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 flex flex-col">
             <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2 mb-4">
-              <Scale className="w-4 h-4 text-emerald-600" /> Comparaciones Automáticas
+              <Scale className="w-4 h-4 text-emerald-600" /> 
+              <span className="flex-1">Comparaciones Automáticas</span>
+              <button 
+                onClick={() => setShowSmartRuleModal(true)}
+                className="p-1.5 hover:bg-emerald-50 rounded-lg text-gray-400 hover:text-emerald-600 transition-colors border border-transparent hover:border-emerald-200"
+                title="Resolución Inteligente de Reglas (RAG)"
+              >
+                <Settings className="w-4 h-4" />
+              </button>
             </h3>
             <div className="flex flex-col gap-2 mb-4">
               {renderToggle('regla_firma_pub', 'Comparar Fecha Publicación vs Firma', 'regla_firma_pub_cumple, regla_firma_pub_diff')}
@@ -811,6 +821,19 @@ export default function DashboardPage() {
       />
 
       {/* Modal de Detalles Profundos */}
+      {showSmartRuleModal && (
+        <SmartRuleValidatorModal 
+          isOpen={showSmartRuleModal}
+          onClose={() => setShowSmartRuleModal(false)}
+          jobId={jobId}
+          resultsData={resultsData}
+          onRefresh={() => {
+            // Recargar datos si es necesario
+            window.location.reload();
+          }}
+        />
+      )}
+
       {selectedContrato && (
         <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center p-8 z-50">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col max-h-[90vh] overflow-hidden border border-gray-200">

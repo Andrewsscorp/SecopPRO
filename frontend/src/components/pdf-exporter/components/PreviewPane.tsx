@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import rehypeRaw from 'rehype-raw';
 import mermaid from 'mermaid';
 import { usePdfExporterStore } from '../store';
 import { ChevronLeft, ChevronRight, Minus, Plus, Download } from 'lucide-react';
@@ -12,8 +13,25 @@ const MermaidChart = ({ chart }: { chart: string }) => {
     if (containerRef.current && chart) {
       mermaid.initialize({
         startOnLoad: false,
-        theme: 'default',
+        theme: 'base',
         securityLevel: 'loose',
+        themeVariables: {
+          primaryColor: '#059669', // emerald-600
+          primaryTextColor: '#ffffff',
+          primaryBorderColor: '#047857', // emerald-700
+          lineColor: '#334155', // slate-700
+          secondaryColor: '#f8fafc', // slate-50
+          tertiaryColor: '#e2e8f0', // slate-200
+          pie1: '#059669', // emerald-600
+          pie2: '#0f172a', // slate-900
+          pie3: '#334155', // slate-700
+          pie4: '#64748b', // slate-500
+          pie5: '#94a3b8', // slate-400
+          pie6: '#cbd5e1', // slate-300
+          fontFamily: 'inherit',
+          pieTitleTextSize: '18px',
+          pieLegendTextSize: '14px',
+        }
       });
       mermaid.render('mermaid-svg-' + Math.random().toString(36).substring(2, 9), chart)
         .then((result) => {
@@ -136,7 +154,7 @@ export const PreviewPane: React.FC = () => {
                       </div>
                       {generatedAiContent.portada ? (
                          <div className="prose prose-sm prose-slate max-w-none">
-                           <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm]}>{generatedAiContent.portada}</ReactMarkdown>
+                           <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>{generatedAiContent.portada}</ReactMarkdown>
                          </div>
                       ) : (
                         <>
@@ -175,7 +193,7 @@ export const PreviewPane: React.FC = () => {
                   <div className="mb-4">
                     {generatedAiContent.resumen ? (
                       <div className="prose prose-sm prose-slate max-w-none">
-                        <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm]}>{generatedAiContent.resumen}</ReactMarkdown>
+                        <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>{generatedAiContent.resumen}</ReactMarkdown>
                       </div>
                     ) : (
                       <div>
@@ -228,7 +246,7 @@ export const PreviewPane: React.FC = () => {
                   <div>
                     {generatedAiContent.resultados ? (
                       <div className="prose prose-sm prose-slate max-w-none">
-                        <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm]}>{generatedAiContent.resultados}</ReactMarkdown>
+                        <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>{generatedAiContent.resultados}</ReactMarkdown>
                       </div>
                     ) : (
                       <h3 className="text-sm font-bold text-slate-800 mb-4 uppercase">Tabla de Resultados</h3>
@@ -255,7 +273,7 @@ export const PreviewPane: React.FC = () => {
                   <div>
                     {generatedAiContent.comparaciones ? (
                       <div className="prose prose-sm prose-slate max-w-none">
-                        <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm]}>{generatedAiContent.comparaciones}</ReactMarkdown>
+                        <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>{generatedAiContent.comparaciones}</ReactMarkdown>
                       </div>
                     ) : (
                       <h3 className="text-sm font-bold text-slate-800 mb-4 uppercase">Comparaciones y Análisis</h3>
@@ -282,7 +300,7 @@ export const PreviewPane: React.FC = () => {
                   <div>
                     {generatedAiContent.graficos ? (
                       <div className="prose prose-sm prose-slate max-w-none">
-                        <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm]}>{generatedAiContent.graficos}</ReactMarkdown>
+                        <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>{generatedAiContent.graficos}</ReactMarkdown>
                       </div>
                     ) : (
                       <h3 className="text-sm font-bold text-slate-800 mb-4 uppercase">Gráficos y Visualizaciones</h3>
@@ -298,6 +316,86 @@ export const PreviewPane: React.FC = () => {
                 )}
               </div>
             )}
+            {/* PAGINA 6: Análisis a Adjudicatarios */}
+            {isSectionEnabled('adjudicatarios') && (
+              <div 
+                className="bg-white shadow-lg relative shrink-0 overflow-hidden"
+                style={{ width: isLandscape ? '297mm' : '210mm', minHeight: 'auto' }}
+              >
+                <div className="p-16 flex flex-col gap-8 h-full pointer-events-none">
+                  <div>
+                    {generatedAiContent.adjudicatarios ? (
+                      <div className="prose prose-sm prose-slate max-w-none">
+                        <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>{generatedAiContent.adjudicatarios}</ReactMarkdown>
+                      </div>
+                    ) : (
+                      <h3 className="text-sm font-bold text-slate-800 mb-4 uppercase">Análisis a Adjudicatarios</h3>
+                    )}
+                  </div>
+                </div>
+                {watermark.enabled && (
+                  <div className={`absolute inset-0 overflow-hidden pointer-events-none p-16 flex ${getWatermarkPositionClass()}`}>
+                    <div className="font-bold whitespace-nowrap select-none" style={{ color: watermark.color, opacity: watermark.opacity / 100, fontSize: `${watermark.size}px`, transform: `rotate(${watermark.rotation})`, transformOrigin: 'center center' }}>
+                      {watermark.text}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+            {/* PAGINA 7: Conclusiones y Recomendaciones */}
+            {isSectionEnabled('conclusiones') && (
+              <div 
+                className="bg-white shadow-lg relative shrink-0 overflow-hidden"
+                style={{ width: isLandscape ? '297mm' : '210mm', minHeight: 'auto' }}
+              >
+                <div className="p-16 flex flex-col gap-8 h-full pointer-events-none">
+                  <div>
+                    {generatedAiContent.conclusiones ? (
+                      <div className="prose prose-sm prose-slate max-w-none">
+                        <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>{generatedAiContent.conclusiones}</ReactMarkdown>
+                      </div>
+                    ) : (
+                      <h3 className="text-sm font-bold text-slate-800 mb-4 uppercase">Conclusiones y Recomendaciones</h3>
+                    )}
+                  </div>
+                </div>
+                {watermark.enabled && (
+                  <div className={`absolute inset-0 overflow-hidden pointer-events-none p-16 flex ${getWatermarkPositionClass()}`}>
+                    <div className="font-bold whitespace-nowrap select-none" style={{ color: watermark.color, opacity: watermark.opacity / 100, fontSize: `${watermark.size}px`, transform: `rotate(${watermark.rotation})`, transformOrigin: 'center center' }}>
+                      {watermark.text}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+            
+            {/* PAGINA 8: Anexos */}
+            {isSectionEnabled('anexos') && (
+              <div 
+                className="bg-white shadow-lg relative shrink-0 overflow-hidden"
+                style={{ width: isLandscape ? '297mm' : '210mm', minHeight: 'auto' }}
+              >
+                <div className="p-16 flex flex-col gap-8 h-full pointer-events-none">
+                  <div>
+                    {generatedAiContent.anexos ? (
+                      <div className="prose prose-sm prose-slate max-w-none">
+                        <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>{generatedAiContent.anexos}</ReactMarkdown>
+                      </div>
+                    ) : (
+                      <h3 className="text-sm font-bold text-slate-800 mb-4 uppercase">Anexos</h3>
+                    )}
+                  </div>
+                </div>
+                {watermark.enabled && (
+                  <div className={`absolute inset-0 overflow-hidden pointer-events-none p-16 flex ${getWatermarkPositionClass()}`}>
+                    <div className="font-bold whitespace-nowrap select-none" style={{ color: watermark.color, opacity: watermark.opacity / 100, fontSize: `${watermark.size}px`, transform: `rotate(${watermark.rotation})`, transformOrigin: 'center center' }}>
+                      {watermark.text}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
           </div>
         </div>
       </div>

@@ -6,6 +6,7 @@ export type SectionId =
   | 'resultados' 
   | 'comparaciones' 
   | 'graficos' 
+  | 'adjudicatarios'
   | 'conclusiones' 
   | 'anexos';
 
@@ -22,6 +23,7 @@ const DEFAULT_SECTIONS: SectionItem[] = [
   { id: 'resultados', name: 'Tabla de resultados', description: 'Datos principales del análisis', enabled: false },
   { id: 'comparaciones', name: 'Comparaciones y análisis', description: 'Resultados de comparaciones automáticas', enabled: true },
   { id: 'graficos', name: 'Gráficos y visualizaciones', description: 'Gráficos de distribución y tendencias', enabled: false },
+  { id: 'adjudicatarios', name: 'Análisis a Adjudicatarios', description: 'Historial y evaluación de contratistas', enabled: true },
   { id: 'conclusiones', name: 'Conclusiones y recomendaciones', description: 'Conclusiones del análisis y recomendaciones', enabled: false },
   { id: 'anexos', name: 'Anexos', description: 'Documentos relacionados y metodología', enabled: true },
 ];
@@ -83,11 +85,17 @@ interface PdfExporterState {
     resultados: string | null;
     comparaciones: string | null;
     graficos: string | null;
+    adjudicatarios: string | null;
+    conclusiones: string | null;
+    anexos: string | null;
   };
   setGeneratedAiContent: (content: Partial<PdfExporterState['generatedAiContent']>) => void;
 
   tokensUsados: number;
   setTokensUsados: (tokens: number) => void;
+
+  selectedContractors: string[];
+  setSelectedContractors: (nits: string[]) => void;
 }
 
 const getTodayDateStr = () => {
@@ -156,6 +164,8 @@ export const usePdfExporterStore = create<PdfExporterState>((set) => ({
     resultados: null,
     comparaciones: null,
     graficos: null,
+    adjudicatarios: null,
+    conclusiones: null,
   },
   setGeneratedAiContent: (content) => set((state) => ({ 
     generatedAiContent: { ...state.generatedAiContent, ...content } 
@@ -163,4 +173,7 @@ export const usePdfExporterStore = create<PdfExporterState>((set) => ({
 
   tokensUsados: 0,
   setTokensUsados: (tokensUsados) => set({ tokensUsados }),
+
+  selectedContractors: [],
+  setSelectedContractors: (selectedContractors) => set({ selectedContractors }),
 }));
