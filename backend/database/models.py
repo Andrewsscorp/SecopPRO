@@ -143,6 +143,19 @@ class ContratoAnalisis(Base):
     # Solo datos que varían por análisis (ej. hallazgos OCR específicos)
     hallazgos_ocr = Column(JSON) 
 
+class PdfAiCache(Base):
+    """Caché de resultados generados por IA para el PDF Exporter"""
+    __tablename__ = "pdf_ai_cache"
+    job_id = Column(String, primary_key=True)
+    portada = Column(String, nullable=True)
+    resumen = Column(String, nullable=True)
+    resultados = Column(String, nullable=True)
+    comparaciones = Column(String, nullable=True)
+    graficos = Column(String, nullable=True)
+    tokens_estimados = Column(Integer, default=0)
+    tokens_usados = Column(Integer, default=0)
+    fecha_generacion = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
 class ResultadoOCR(Base):
     """Resultados relacionales del análisis forense de OCR"""
     __tablename__ = "resultados_ocr"

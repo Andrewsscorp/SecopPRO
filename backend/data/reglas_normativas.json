@@ -1,0 +1,1278 @@
+{
+  "metadata": {
+    "titulo": "Motor de Reglas de Validación - Modalidades de Contratación Pública Colombiana (SECOP II)",
+    "proposito": "Base de reglas parametrizables para que un sistema de IA/auditoría evalúe automáticamente el cumplimiento normativo de un proceso de contratación, comparando datos reales contra condiciones programables. Cada regla produce un resultado booleano (true/false) o 'dato_faltante' si el sistema no tiene la información necesaria para evaluar. El sistema NUNCA debe inferir un resultado sin los campos requeridos presentes.",
+    "instruccion_para_el_sistema_evaluador": [
+      "Para cada regla, verificar que todos los 'campos_requeridos' existan en los datos del expediente evaluado.",
+      "Si falta algún campo requerido, el resultado de la regla es 'dato_faltante' (nunca asumir cumplimiento ni incumplimiento).",
+      "Si todos los campos existen, evaluar la 'formula' aplicando el 'operador' entre 'izquierda' y 'derecha', y devolver 'cumple' o 'incumple' según corresponda.",
+      "No aplicar una regla si su 'condicion_aplicabilidad' (a nivel de modalidad o de la regla misma) no se cumple con los datos del expediente.",
+      "No citar ni derivar una norma que no esté explícitamente en este archivo."
+    ],
+    "version_esquema": "1.0"
+  },
+  "diccionario_campos_entrada": {
+    "modalidad_codigo": {
+      "tipo": "string_enum",
+      "valores_permitidos": [
+        "LP",
+        "SA-MC",
+        "SA-SI",
+        "CM",
+        "MC",
+        "CD",
+        "RE"
+      ],
+      "descripcion": "Código de la modalidad de selección usada en el proceso"
+    },
+    "presupuesto_anual_entidad_smmlv": {
+      "tipo": "numero",
+      "descripcion": "Presupuesto anual de la entidad expresado en SMMLV"
+    },
+    "valor_proceso_smmlv": {
+      "tipo": "numero",
+      "descripcion": "Presupuesto oficial estimado del proceso, expresado en SMMLV"
+    },
+    "valor_proceso_usd": {
+      "tipo": "numero",
+      "descripcion": "Presupuesto oficial estimado del proceso, expresado en USD (tasa MinCIT vigente)"
+    },
+    "valor_total_contrato": {
+      "tipo": "numero",
+      "descripcion": "Valor total del contrato en pesos colombianos"
+    },
+    "valor_anticipo": {
+      "tipo": "numero",
+      "descripcion": "Monto pactado como anticipo"
+    },
+    "valor_pago_anticipado": {
+      "tipo": "numero",
+      "descripcion": "Monto pactado como pago anticipado"
+    },
+    "fecha_publicacion_proyecto_pliegos": {
+      "tipo": "fecha"
+    },
+    "fecha_apertura_proceso": {
+      "tipo": "fecha"
+    },
+    "fecha_publicacion_adenda": {
+      "tipo": "fecha"
+    },
+    "fecha_cierre_ofertas": {
+      "tipo": "fecha"
+    },
+    "fecha_inicio_traslado_informe_evaluacion": {
+      "tipo": "fecha"
+    },
+    "fecha_fin_traslado_informe_evaluacion": {
+      "tipo": "fecha"
+    },
+    "fecha_limite_manifestacion_interes": {
+      "tipo": "fecha"
+    },
+    "numero_manifestaciones_interes": {
+      "tipo": "entero"
+    },
+    "sorteo_previsto_en_pliego": {
+      "tipo": "booleano"
+    },
+    "numero_ofertas_recibidas": {
+      "tipo": "entero"
+    },
+    "existe_constancia_cumplimiento_requisitos_habilitantes": {
+      "tipo": "booleano"
+    },
+    "factor_unico_evaluacion": {
+      "tipo": "string_enum",
+      "valores_permitidos": [
+        "precio",
+        "calidad_tecnica",
+        "mixto"
+      ]
+    },
+    "amp_vigente_para_objeto": {
+      "tipo": "booleano",
+      "descripcion": "Si existe Acuerdo Marco de Precios vigente para el objeto del proceso"
+    },
+    "existe_analisis_costo_beneficio_amp": {
+      "tipo": "booleano"
+    },
+    "anonimato_lances_garantizado": {
+      "tipo": "booleano"
+    },
+    "tipo_concurso": {
+      "tipo": "string_enum",
+      "valores_permitidos": [
+        "abierto",
+        "con_precalificacion"
+      ]
+    },
+    "usa_documentos_tipo": {
+      "tipo": "booleano"
+    },
+    "matriz_evaluacion_incluye_puntaje_discapacidad": {
+      "tipo": "booleano"
+    },
+    "causal_contratacion_directa": {
+      "tipo": "string_enum",
+      "valores_permitidos": [
+        "urgencia_manifiesta",
+        "emprestitos",
+        "interadministrativo",
+        "ciencia_tecnologia",
+        "encargo_fiduciario_pasivos",
+        "no_pluralidad_oferentes",
+        "servicios_profesionales_apoyo_gestion",
+        "arrendamiento_adquisicion_inmuebles",
+        "defensa_reserva",
+        "banco_republica_minhacienda"
+      ]
+    },
+    "existe_acto_justificacion_causal": {
+      "tipo": "booleano"
+    },
+    "fecha_envio_organo_control": {
+      "tipo": "fecha"
+    },
+    "fecha_acto_declaratoria_urgencia": {
+      "tipo": "fecha"
+    },
+    "existe_soporte_exclusividad_o_estudio_mercado": {
+      "tipo": "booleano"
+    },
+    "existe_certificacion_insuficiencia_personal_planta": {
+      "tipo": "booleano"
+    },
+    "existe_justificacion_exigencia_o_no_garantias": {
+      "tipo": "booleano"
+    },
+    "objeto_contrato_tipo": {
+      "tipo": "string_enum",
+      "valores_permitidos": [
+        "bienes",
+        "obra",
+        "servicios_generales",
+        "consultoria",
+        "interventoria",
+        "prestacion_servicios_profesionales",
+        "apoyo_gestion",
+        "arquitectura"
+      ]
+    },
+    "existe_rup_numero": {
+      "tipo": "booleano"
+    },
+    "rup_en_firme": {
+      "tipo": "booleano"
+    },
+    "objeto_en_lista_excepciones_rup": {
+      "tipo": "booleano"
+    },
+    "valor_oferta": {
+      "tipo": "numero"
+    },
+    "valor_asegurado_garantia_seriedad": {
+      "tipo": "numero"
+    },
+    "existe_poliza_cumplimiento": {
+      "tipo": "booleano"
+    },
+    "objeto_exceptuado_garantia_cumplimiento": {
+      "tipo": "booleano"
+    },
+    "existe_amparo_buen_manejo_anticipo_o_devolucion_pago_anticipado": {
+      "tipo": "booleano"
+    },
+    "fecha_terminacion_ejecucion": {
+      "tipo": "fecha"
+    },
+    "fecha_acta_liquidacion_bilateral": {
+      "tipo": "fecha"
+    },
+    "plazo_liquidacion_pactado_meses": {
+      "tipo": "numero",
+      "nullable": true
+    },
+    "existe_acto_liquidacion_unilateral": {
+      "tipo": "booleano"
+    },
+    "fecha_vencimiento_plazo_liquidacion_bilateral": {
+      "tipo": "fecha"
+    },
+    "fecha_acto_liquidacion_unilateral": {
+      "tipo": "fecha"
+    },
+    "fecha_expedicion_documento": {
+      "tipo": "fecha"
+    },
+    "fecha_publicacion_secop": {
+      "tipo": "fecha"
+    },
+    "existe_cdp": {
+      "tipo": "booleano"
+    },
+    "fecha_cdp": {
+      "tipo": "fecha"
+    },
+    "fecha_suscripcion_contrato": {
+      "tipo": "fecha"
+    },
+    "count_solicitudes_mipyme_antes_apertura": {
+      "tipo": "entero"
+    },
+    "convocatoria_limitada_mipyme": {
+      "tipo": "booleano"
+    },
+    "count_interesados_que_cumplen_precalificacion": {
+      "tipo": "entero"
+    },
+    "numero_maximo_lista_precalificados": {
+      "tipo": "entero"
+    },
+    "existe_acta_sorteo_precalificacion": {
+      "tipo": "booleano"
+    },
+    "causal_modalidad_previa": {
+      "tipo": "string_enum",
+      "valores_permitidos": [
+        "licitacion_declarada_desierta",
+        null
+      ]
+    },
+    "fecha_declaratoria_desierta": {
+      "tipo": "fecha"
+    },
+    "fecha_apertura_seleccion_abreviada": {
+      "tipo": "fecha"
+    }
+  },
+  "reglas_transversales": [
+    {
+      "id_regla": "TRANSV-01",
+      "nombre": "Límite de anticipo y pago anticipado (50%)",
+      "norma": "Ley 80 de 1993, Art. 40, Parágrafo",
+      "aplica_a_modalidades": [
+        "LP",
+        "SA-MC",
+        "SA-SI",
+        "CM",
+        "MC",
+        "CD",
+        "RE"
+      ],
+      "campos_requeridos": [
+        "valor_anticipo",
+        "valor_pago_anticipado",
+        "valor_total_contrato"
+      ],
+      "formula": {
+        "izquierda": "valor_anticipo + valor_pago_anticipado",
+        "operador": "<=",
+        "derecha": "0.5 * valor_total_contrato",
+        "unidad": "pesos_colombianos"
+      },
+      "resultado_cumple": "true si (valor_anticipo + valor_pago_anticipado) <= 0.5 * valor_total_contrato",
+      "resultado_incumple": "false en caso contrario",
+      "condicion_no_evaluar": "Si valor_anticipo == 0 y valor_pago_anticipado == 0, la regla no aplica (retornar 'no_aplica', no 'incumple')",
+      "texto_norma": "En los contratos que celebren las entidades estatales se podrá pactar el pago anticipado y la entrega de anticipos, pero su monto no podrá exceder del cincuenta por ciento (50%) del valor del respectivo contrato (Ley 80 de 1993, Art. 40, Parágrafo). Este límite aplica a todas las modalidades de selección, incluidos convenios interadministrativos y contratos de tracto sucesivo, sin distinción.",
+      "plantilla_redaccion_no_conformidad": "Revisado el expediente, se encontró que {hecho_encontrado_en_el_pdf} (fuente: {documento_y_pagina}), lo cual contraviene lo dispuesto en Ley 80 de 1993, Art. 40, Parágrafo, según el cual {resumen_de_texto_norma}. En consecuencia, la regla 'Límite de anticipo y pago anticipado (50%)' (id TRANSV-01) se evalúa como NO CONFORME, toda vez que {explicacion_puntual_del_incumplimiento_basada_solo_en_los_hechos_extraidos}."
+    },
+    {
+      "id_regla": "TRANSV-02",
+      "nombre": "Garantía de amparo de anticipo/pago anticipado",
+      "norma": "Decreto 1082 de 2015, Art. 2.2.1.2.3.1.7",
+      "aplica_a_modalidades": [
+        "LP",
+        "SA-MC",
+        "SA-SI",
+        "CM",
+        "MC",
+        "CD",
+        "RE"
+      ],
+      "campos_requeridos": [
+        "valor_anticipo",
+        "valor_pago_anticipado",
+        "existe_amparo_buen_manejo_anticipo_o_devolucion_pago_anticipado"
+      ],
+      "condicion_aplicabilidad": {
+        "campo": "valor_anticipo + valor_pago_anticipado",
+        "operador": ">",
+        "valor_referencia": 0
+      },
+      "formula": {
+        "campo": "existe_amparo_buen_manejo_anticipo_o_devolucion_pago_anticipado",
+        "operador": "==",
+        "valor_referencia": true
+      },
+      "texto_norma": "La garantía de cumplimiento debe cubrir el buen manejo y correcta inversión del anticipo, o la devolución del pago anticipado, amparando los perjuicios por no inversión, uso indebido o apropiación indebida del anticipo, o por la no devolución total o parcial del pago anticipado (Decreto 1082 de 2015, Art. 2.2.1.2.3.1.7).",
+      "plantilla_redaccion_no_conformidad": "Revisado el expediente, se encontró que {hecho_encontrado_en_el_pdf} (fuente: {documento_y_pagina}), lo cual contraviene lo dispuesto en Decreto 1082 de 2015, Art. 2.2.1.2.3.1.7, según el cual {resumen_de_texto_norma}. En consecuencia, la regla 'Garantía de amparo de anticipo/pago anticipado' (id TRANSV-02) se evalúa como NO CONFORME, toda vez que {explicacion_puntual_del_incumplimiento_basada_solo_en_los_hechos_extraidos}."
+    },
+    {
+      "id_regla": "TRANSV-03",
+      "nombre": "Plazos de liquidación (bilateral / unilateral / tardía)",
+      "norma": "Ley 1150 de 2007, Art. 11; Ley 80 de 1993, Art. 60 (mod. Art. 217 Decreto Ley 019 de 2012)",
+      "aplica_a_modalidades": [
+        "LP",
+        "SA-MC",
+        "SA-SI",
+        "CM",
+        "MC",
+        "CD",
+        "RE"
+      ],
+      "excepcion": {
+        "condicion": "objeto_contrato_tipo IN ['prestacion_servicios_profesionales', 'apoyo_gestion']",
+        "resultado": "no_aplica (no requiere liquidación obligatoria)"
+      },
+      "subreglas": [
+        {
+          "id": "TRANSV-03a",
+          "descripcion": "Liquidación bilateral, si no hay plazo pactado distinto",
+          "campos_requeridos": [
+            "fecha_acta_liquidacion_bilateral",
+            "fecha_terminacion_ejecucion",
+            "plazo_liquidacion_pactado_meses"
+          ],
+          "formula": {
+            "izquierda": "fecha_acta_liquidacion_bilateral - fecha_terminacion_ejecucion",
+            "operador": "<=",
+            "derecha": "plazo_liquidacion_pactado_meses SI EXISTE, SI NO 4",
+            "unidad": "meses"
+          },
+          "texto_norma": "El contrato debe liquidarse de mutuo acuerdo dentro del término fijado en el pliego o contrato, o en su defecto dentro de los cuatro (4) meses siguientes a la terminación de la ejecución; a falta de liquidación bilateral, la entidad debe liquidar unilateralmente dentro de los dos (2) meses siguientes; puede liquidarse tardíamente (bilateral, unilateral o judicial) dentro de los dos (2) años siguientes al vencimiento del plazo de liquidación unilateral (Ley 1150 de 2007, Art. 11; Ley 80 de 1993, Art. 60, modificado por Art. 217 Decreto Ley 019 de 2012). Los contratos de prestación de servicios profesionales y de apoyo a la gestión no requieren liquidación obligatoria."
+        },
+        {
+          "id": "TRANSV-03b",
+          "descripcion": "Liquidación unilateral (si no hubo bilateral)",
+          "campos_requeridos": [
+            "fecha_acto_liquidacion_unilateral",
+            "fecha_vencimiento_plazo_liquidacion_bilateral"
+          ],
+          "formula": {
+            "izquierda": "fecha_acto_liquidacion_unilateral - fecha_vencimiento_plazo_liquidacion_bilateral",
+            "operador": "<=",
+            "derecha": 2,
+            "unidad": "meses"
+          },
+          "texto_norma": "El contrato debe liquidarse de mutuo acuerdo dentro del término fijado en el pliego o contrato, o en su defecto dentro de los cuatro (4) meses siguientes a la terminación de la ejecución; a falta de liquidación bilateral, la entidad debe liquidar unilateralmente dentro de los dos (2) meses siguientes; puede liquidarse tardíamente (bilateral, unilateral o judicial) dentro de los dos (2) años siguientes al vencimiento del plazo de liquidación unilateral (Ley 1150 de 2007, Art. 11; Ley 80 de 1993, Art. 60, modificado por Art. 217 Decreto Ley 019 de 2012). Los contratos de prestación de servicios profesionales y de apoyo a la gestión no requieren liquidación obligatoria."
+        },
+        {
+          "id": "TRANSV-03c",
+          "descripcion": "Fuera de término absoluto (solo si no hay ningún tipo de liquidación)",
+          "formula": {
+            "izquierda": "fecha_actual - fecha_terminacion_ejecucion",
+            "operador": ">",
+            "derecha": 30,
+            "unidad": "meses (4 bilateral + 2 unilateral + 24 tardía)"
+          },
+          "resultado_si_cumple_formula": "hallazgo: fuera_de_termino",
+          "texto_norma": "El contrato debe liquidarse de mutuo acuerdo dentro del término fijado en el pliego o contrato, o en su defecto dentro de los cuatro (4) meses siguientes a la terminación de la ejecución; a falta de liquidación bilateral, la entidad debe liquidar unilateralmente dentro de los dos (2) meses siguientes; puede liquidarse tardíamente (bilateral, unilateral o judicial) dentro de los dos (2) años siguientes al vencimiento del plazo de liquidación unilateral (Ley 1150 de 2007, Art. 11; Ley 80 de 1993, Art. 60, modificado por Art. 217 Decreto Ley 019 de 2012). Los contratos de prestación de servicios profesionales y de apoyo a la gestión no requieren liquidación obligatoria."
+        }
+      ],
+      "texto_norma": "El contrato debe liquidarse de mutuo acuerdo dentro del término fijado en el pliego o contrato, o en su defecto dentro de los cuatro (4) meses siguientes a la terminación de la ejecución; a falta de liquidación bilateral, la entidad debe liquidar unilateralmente dentro de los dos (2) meses siguientes; puede liquidarse tardíamente (bilateral, unilateral o judicial) dentro de los dos (2) años siguientes al vencimiento del plazo de liquidación unilateral (Ley 1150 de 2007, Art. 11; Ley 80 de 1993, Art. 60, modificado por Art. 217 Decreto Ley 019 de 2012). Los contratos de prestación de servicios profesionales y de apoyo a la gestión no requieren liquidación obligatoria.",
+      "plantilla_redaccion_no_conformidad": "Revisado el expediente, se encontró que {hecho_encontrado_en_el_pdf} (fuente: {documento_y_pagina}), lo cual contraviene lo dispuesto en Ley 1150 de 2007, Art. 11; Ley 80 de 1993, Art. 60 (mod. Art. 217 Decreto Ley 019 de 2012), según el cual {resumen_de_texto_norma}. En consecuencia, la regla 'Plazos de liquidación (bilateral / unilateral / tardía)' (id TRANSV-03) se evalúa como NO CONFORME, toda vez que {explicacion_puntual_del_incumplimiento_basada_solo_en_los_hechos_extraidos}."
+    },
+    {
+      "id_regla": "TRANSV-04",
+      "nombre": "Publicación en SECOP dentro de 3 días hábiles",
+      "norma": "Decreto 1082 de 2015, Art. 2.2.1.1.1.7.1",
+      "aplica_a_modalidades": [
+        "LP",
+        "SA-MC",
+        "SA-SI",
+        "CM",
+        "MC",
+        "CD",
+        "RE"
+      ],
+      "campos_requeridos": [
+        "fecha_publicacion_secop",
+        "fecha_expedicion_documento"
+      ],
+      "formula": {
+        "izquierda": "fecha_publicacion_secop - fecha_expedicion_documento",
+        "operador": "<=",
+        "derecha": 3,
+        "unidad": "dias_habiles"
+      },
+      "texto_norma": "Todos los actos administrativos y documentos del Proceso de Contratación deben publicarse en el SECOP dentro de los tres (3) días hábiles siguientes a su expedición, para todas las modalidades de selección (Decreto 1082 de 2015, Art. 2.2.1.1.1.7.1).",
+      "plantilla_redaccion_no_conformidad": "Revisado el expediente, se encontró que {hecho_encontrado_en_el_pdf} (fuente: {documento_y_pagina}), lo cual contraviene lo dispuesto en Decreto 1082 de 2015, Art. 2.2.1.1.1.7.1, según el cual {resumen_de_texto_norma}. En consecuencia, la regla 'Publicación en SECOP dentro de 3 días hábiles' (id TRANSV-04) se evalúa como NO CONFORME, toda vez que {explicacion_puntual_del_incumplimiento_basada_solo_en_los_hechos_extraidos}."
+    },
+    {
+      "id_regla": "TRANSV-05",
+      "nombre": "CDP previo a apertura o suscripción",
+      "norma": "Ley 80 de 1993 Art. 25 Num. 6 y 13",
+      "aplica_a_modalidades": [
+        "LP",
+        "SA-MC",
+        "SA-SI",
+        "CM",
+        "MC",
+        "CD",
+        "RE"
+      ],
+      "excepcion": {
+        "condicion": "modalidad_codigo == 'CM'",
+        "nota": "Ley 1882/2018 Art. 5 permite publicar proyecto de pliegos sin CDP previo; el CDP es exigible solo al acto de apertura definitivo"
+      },
+      "campos_requeridos": [
+        "fecha_cdp",
+        "fecha_apertura_proceso",
+        "fecha_suscripcion_contrato"
+      ],
+      "formula": {
+        "izquierda": "fecha_cdp",
+        "operador": "<=",
+        "derecha": "fecha_apertura_proceso SI EXISTE, SI NO fecha_suscripcion_contrato"
+      },
+      "texto_norma": "Debe existir Certificado de Disponibilidad Presupuestal (CDP) antes de la apertura del proceso de selección o de la celebración del contrato (Ley 80 de 1993, Art. 25 Núm. 6 y 13).",
+      "plantilla_redaccion_no_conformidad": "Revisado el expediente, se encontró que {hecho_encontrado_en_el_pdf} (fuente: {documento_y_pagina}), lo cual contraviene lo dispuesto en Ley 80 de 1993 Art. 25 Num. 6 y 13, según el cual {resumen_de_texto_norma}. En consecuencia, la regla 'CDP previo a apertura o suscripción' (id TRANSV-05) se evalúa como NO CONFORME, toda vez que {explicacion_puntual_del_incumplimiento_basada_solo_en_los_hechos_extraidos}."
+    },
+    {
+      "id_regla": "TRANSV-06",
+      "nombre": "RUP vigente y en firme",
+      "norma": "Ley 1150 de 2007 Art. 6",
+      "aplica_a_modalidades": [
+        "LP",
+        "SA-MC",
+        "SA-SI",
+        "CM"
+      ],
+      "condicion_aplicabilidad": {
+        "campo": "objeto_en_lista_excepciones_rup",
+        "operador": "==",
+        "valor_referencia": false
+      },
+      "campos_requeridos": [
+        "existe_rup_numero",
+        "rup_en_firme"
+      ],
+      "formula": {
+        "campo": "existe_rup_numero AND rup_en_firme",
+        "operador": "==",
+        "valor_referencia": true
+      },
+      "texto_norma": "Se exige Registro Único de Proponentes (RUP) vigente y en firme para participar en Licitación Pública, Selección Abreviada y Concurso de Méritos, salvo las excepciones legales expresas del Art. 6 Núm. 6 de la Ley 1150 de 2007.",
+      "plantilla_redaccion_no_conformidad": "Revisado el expediente, se encontró que {hecho_encontrado_en_el_pdf} (fuente: {documento_y_pagina}), lo cual contraviene lo dispuesto en Ley 1150 de 2007 Art. 6, según el cual {resumen_de_texto_norma}. En consecuencia, la regla 'RUP vigente y en firme' (id TRANSV-06) se evalúa como NO CONFORME, toda vez que {explicacion_puntual_del_incumplimiento_basada_solo_en_los_hechos_extraidos}."
+    }
+  ],
+  "modalidades": [
+    {
+      "codigo": "LP",
+      "nombre_modalidad": "Licitación Pública",
+      "norma_base": "Ley 80 de 1993 Art. 30; Ley 1150 de 2007 Art. 2 Num. 1; Ley 1882 de 2018",
+      "condicion_aplicabilidad": {
+        "descripcion": "Regla general residual: aplica si no existe causal legal expresa de otra modalidad Y valor_proceso_smmlv supera el umbral_menor_cuantia_entidad",
+        "formula": {
+          "campo": "valor_proceso_smmlv",
+          "operador": ">",
+          "valor_referencia": "umbral_menor_cuantia_entidad (derivado de tabla_umbrales_cuantia)"
+        }
+      },
+      "reglas_validacion": [
+        {
+          "id_regla": "LP-01",
+          "nombre": "Publicación proyecto de pliegos (10 días hábiles)",
+          "norma": "Decreto 1082 de 2015, Art. 2.2.1.1.2.1.4 lit. a",
+          "campos_requeridos": [
+            "fecha_apertura_proceso",
+            "fecha_publicacion_proyecto_pliegos"
+          ],
+          "formula": {
+            "izquierda": "fecha_apertura_proceso - fecha_publicacion_proyecto_pliegos",
+            "operador": ">=",
+            "derecha": 10,
+            "unidad": "dias_habiles"
+          },
+          "texto_norma": "Los interesados pueden hacer comentarios al proyecto de pliegos de condiciones a partir de la fecha de publicación de los mismos, durante un término de diez (10) días hábiles, en la licitación pública (Decreto 1082 de 2015, Art. 2.2.1.1.2.1.4, literal a).",
+          "plantilla_redaccion_no_conformidad": "Revisado el expediente, se encontró que {hecho_encontrado_en_el_pdf} (fuente: {documento_y_pagina}), lo cual contraviene lo dispuesto en Decreto 1082 de 2015, Art. 2.2.1.1.2.1.4 lit. a, según el cual {resumen_de_texto_norma}. En consecuencia, la regla 'Publicación proyecto de pliegos (10 días hábiles)' (id LP-01) se evalúa como NO CONFORME, toda vez que {explicacion_puntual_del_incumplimiento_basada_solo_en_los_hechos_extraidos}."
+        },
+        {
+          "id_regla": "LP-02",
+          "nombre": "Publicación de adendas (3 días hábiles antes del cierre)",
+          "norma": "Decreto 1082 de 2015, Art. 2.2.1.1.2.2.1",
+          "campos_requeridos": [
+            "fecha_cierre_ofertas",
+            "fecha_publicacion_adenda"
+          ],
+          "formula": {
+            "izquierda": "fecha_cierre_ofertas - fecha_publicacion_adenda",
+            "operador": ">=",
+            "derecha": 3,
+            "unidad": "dias_habiles"
+          },
+          "texto_norma": "La Entidad Estatal debe publicar las adendas en días hábiles entre las 7:00 a.m. y las 7:00 p.m.; en licitación pública, la publicación debe hacerse con tres (3) días de anticipación al cierre de ofertas (Decreto 1082 de 2015, Art. 2.2.1.1.2.2.1).",
+          "plantilla_redaccion_no_conformidad": "Revisado el expediente, se encontró que {hecho_encontrado_en_el_pdf} (fuente: {documento_y_pagina}), lo cual contraviene lo dispuesto en Decreto 1082 de 2015, Art. 2.2.1.1.2.2.1, según el cual {resumen_de_texto_norma}. En consecuencia, la regla 'Publicación de adendas (3 días hábiles antes del cierre)' (id LP-02) se evalúa como NO CONFORME, toda vez que {explicacion_puntual_del_incumplimiento_basada_solo_en_los_hechos_extraidos}."
+        },
+        {
+          "id_regla": "LP-03",
+          "nombre": "Traslado del informe de evaluación (5 días hábiles)",
+          "norma": "Ley 1882 de 2018, Art. 1",
+          "campos_requeridos": [
+            "fecha_inicio_traslado_informe_evaluacion",
+            "fecha_fin_traslado_informe_evaluacion"
+          ],
+          "formula": {
+            "izquierda": "fecha_fin_traslado_informe_evaluacion - fecha_inicio_traslado_informe_evaluacion",
+            "operador": ">=",
+            "derecha": 5,
+            "unidad": "dias_habiles"
+          },
+          "texto_norma": "El plazo de traslado del informe de evaluación de ofertas, para presentar observaciones y subsanar requisitos habilitantes, es de cinco (5) días hábiles en licitación pública (Ley 1882 de 2018, Art. 1).",
+          "plantilla_redaccion_no_conformidad": "Revisado el expediente, se encontró que {hecho_encontrado_en_el_pdf} (fuente: {documento_y_pagina}), lo cual contraviene lo dispuesto en Ley 1882 de 2018, Art. 1, según el cual {resumen_de_texto_norma}. En consecuencia, la regla 'Traslado del informe de evaluación (5 días hábiles)' (id LP-03) se evalúa como NO CONFORME, toda vez que {explicacion_puntual_del_incumplimiento_basada_solo_en_los_hechos_extraidos}."
+        },
+        {
+          "id_regla": "LP-04",
+          "nombre": "Garantía de seriedad de la oferta (mínimo 10%)",
+          "norma": "Decreto 1082 de 2015, Art. 2.2.1.2.3.1.6",
+          "campos_requeridos": [
+            "valor_asegurado_garantia_seriedad",
+            "valor_oferta"
+          ],
+          "formula": {
+            "izquierda": "valor_asegurado_garantia_seriedad",
+            "operador": ">=",
+            "derecha": "0.10 * valor_oferta"
+          },
+          "texto_norma": "La garantía de seriedad de la oferta debe tener un valor de por lo menos el diez por ciento (10%) del valor de la oferta, salvo en contratos de cuantía superior a un millón de SMMLV, donde el valor se calcula con tabla especial decreciente (Decreto 1082 de 2015, Art. 2.2.1.2.3.1.6).",
+          "plantilla_redaccion_no_conformidad": "Revisado el expediente, se encontró que {hecho_encontrado_en_el_pdf} (fuente: {documento_y_pagina}), lo cual contraviene lo dispuesto en Decreto 1082 de 2015, Art. 2.2.1.2.3.1.6, según el cual {resumen_de_texto_norma}. En consecuencia, la regla 'Garantía de seriedad de la oferta (mínimo 10%)' (id LP-04) se evalúa como NO CONFORME, toda vez que {explicacion_puntual_del_incumplimiento_basada_solo_en_los_hechos_extraidos}."
+        },
+        {
+          "id_regla": "LP-05",
+          "nombre": "Garantía única de cumplimiento obligatoria",
+          "norma": "Decreto 1082 de 2015, Art. 2.2.1.2.3.1.1 y 2.2.1.2.3.1.2",
+          "campos_requeridos": [
+            "existe_poliza_cumplimiento",
+            "objeto_exceptuado_garantia_cumplimiento"
+          ],
+          "formula": {
+            "campo": "existe_poliza_cumplimiento OR objeto_exceptuado_garantia_cumplimiento",
+            "operador": "==",
+            "valor_referencia": true
+          },
+          "texto_norma": "Es obligatoria la Garantía Única de Cumplimiento a cargo del contratista adjudicatario, salvo las excepciones expresas del Art. 2.2.1.2.3.1.2 del Decreto 1082 de 2015.",
+          "plantilla_redaccion_no_conformidad": "Revisado el expediente, se encontró que {hecho_encontrado_en_el_pdf} (fuente: {documento_y_pagina}), lo cual contraviene lo dispuesto en Decreto 1082 de 2015, Art. 2.2.1.2.3.1.1 y 2.2.1.2.3.1.2, según el cual {resumen_de_texto_norma}. En consecuencia, la regla 'Garantía única de cumplimiento obligatoria' (id LP-05) se evalúa como NO CONFORME, toda vez que {explicacion_puntual_del_incumplimiento_basada_solo_en_los_hechos_extraidos}."
+        },
+        {
+          "id_regla": "LP-06",
+          "nombre": "Adjudicación con oferta única requiere verificación de habilitantes",
+          "norma": "Decreto 1082 de 2015, Art. 2.2.1.1.2.2.6",
+          "condicion_aplicabilidad": {
+            "campo": "numero_ofertas_recibidas",
+            "operador": "==",
+            "valor_referencia": 1
+          },
+          "campos_requeridos": [
+            "existe_constancia_cumplimiento_requisitos_habilitantes"
+          ],
+          "formula": {
+            "campo": "existe_constancia_cumplimiento_requisitos_habilitantes",
+            "operador": "==",
+            "valor_referencia": true
+          },
+          "texto_norma": "La entidad puede adjudicar aunque se presente una única oferta, siempre que esta cumpla los requisitos habilitantes y satisfaga los pliegos de condiciones (Decreto 1082 de 2015, Art. 2.2.1.1.2.2.6).",
+          "plantilla_redaccion_no_conformidad": "Revisado el expediente, se encontró que {hecho_encontrado_en_el_pdf} (fuente: {documento_y_pagina}), lo cual contraviene lo dispuesto en Decreto 1082 de 2015, Art. 2.2.1.1.2.2.6, según el cual {resumen_de_texto_norma}. En consecuencia, la regla 'Adjudicación con oferta única requiere verificación de habilitantes' (id LP-06) se evalúa como NO CONFORME, toda vez que {explicacion_puntual_del_incumplimiento_basada_solo_en_los_hechos_extraidos}."
+        },
+        {
+          "id_regla": "LP-07",
+          "nombre": "Convocatoria limitada a Mipyme (condicional)",
+          "norma": "Decreto 1082 de 2015, Art. 2.2.1.2.4.2.5",
+          "condicion_aplicabilidad": {
+            "formula": "valor_proceso_usd < umbral_mipyme_vigente_bienal AND count_solicitudes_mipyme_antes_apertura >= 3"
+          },
+          "campos_requeridos": [
+            "convocatoria_limitada_mipyme"
+          ],
+          "formula": {
+            "campo": "convocatoria_limitada_mipyme",
+            "operador": "==",
+            "valor_referencia": true
+          },
+          "nota": "Si la condición de aplicabilidad no se cumple, la convocatoria limitada es opcional; no evaluar como incumplimiento",
+          "texto_norma": "La entidad debe limitar la convocatoria a Mipyme nacionales con mínimo un año de existencia cuando el valor del proceso sea menor a US$125.000 y haya recibido solicitudes de al menos 3 Mipyme nacionales, presentadas mínimo un día hábil antes de la apertura (Decreto 1082 de 2015, Art. 2.2.1.2.4.2.5).",
+          "plantilla_redaccion_no_conformidad": "Revisado el expediente, se encontró que {hecho_encontrado_en_el_pdf} (fuente: {documento_y_pagina}), lo cual contraviene lo dispuesto en Decreto 1082 de 2015, Art. 2.2.1.2.4.2.5, según el cual {resumen_de_texto_norma}. En consecuencia, la regla 'Convocatoria limitada a Mipyme (condicional)' (id LP-07) se evalúa como NO CONFORME, toda vez que {explicacion_puntual_del_incumplimiento_basada_solo_en_los_hechos_extraidos}."
+        }
+      ]
+    },
+    {
+      "codigo": "SA-SI",
+      "nombre_modalidad": "Selección Abreviada - Subasta Inversa",
+      "norma_base": "Ley 1150 de 2007 Art. 2 Num. 2 lit. a); Decreto 1082 de 2015 Arts. 2.2.1.2.1.2.1 y ss.; Decreto 310 de 2021",
+      "condicion_aplicabilidad": {
+        "descripcion": "Objeto de características técnicas uniformes y de común utilización"
+      },
+      "reglas_validacion": [
+        {
+          "id_regla": "SASI-01",
+          "nombre": "Análisis costo-beneficio si existe AMP vigente para el objeto",
+          "norma": "Decreto 1082 de 2015, Art. 2.2.1.2.1.2.7 y 2.2.1.2.1.2.12 (mod. Decreto 310/2021)",
+          "condicion_aplicabilidad": {
+            "campo": "amp_vigente_para_objeto",
+            "operador": "==",
+            "valor_referencia": true
+          },
+          "campos_requeridos": [
+            "existe_analisis_costo_beneficio_amp"
+          ],
+          "formula": {
+            "campo": "existe_analisis_costo_beneficio_amp",
+            "operador": "==",
+            "valor_referencia": true
+          },
+          "texto_norma": "Antes de adelantar una subasta inversa, la entidad debe verificar si el bien o servicio está cobijado por un Acuerdo Marco de Precios (AMP) vigente; de existir AMP, usar subasta inversa en su lugar exige un análisis costo-beneficio documentado (Decreto 1082 de 2015, Art. 2.2.1.2.1.2.7 y 2.2.1.2.1.2.12, modificado por Decreto 310 de 2021).",
+          "plantilla_redaccion_no_conformidad": "Revisado el expediente, se encontró que {hecho_encontrado_en_el_pdf} (fuente: {documento_y_pagina}), lo cual contraviene lo dispuesto en Decreto 1082 de 2015, Art. 2.2.1.2.1.2.7 y 2.2.1.2.1.2.12 (mod. Decreto 310/2021), según el cual {resumen_de_texto_norma}. En consecuencia, la regla 'Análisis costo-beneficio si existe AMP vigente para el objeto' (id SASI-01) se evalúa como NO CONFORME, toda vez que {explicacion_puntual_del_incumplimiento_basada_solo_en_los_hechos_extraidos}."
+        },
+        {
+          "id_regla": "SASI-02",
+          "nombre": "Publicación proyecto de pliegos (5 días hábiles)",
+          "norma": "Decreto 1082 de 2015, Art. 2.2.1.1.2.1.4 lit. b",
+          "campos_requeridos": [
+            "fecha_apertura_proceso",
+            "fecha_publicacion_proyecto_pliegos"
+          ],
+          "formula": {
+            "izquierda": "fecha_apertura_proceso - fecha_publicacion_proyecto_pliegos",
+            "operador": ">=",
+            "derecha": 5,
+            "unidad": "dias_habiles"
+          },
+          "texto_norma": "El proyecto de pliego de condiciones debe publicarse por un mínimo de cinco (5) días hábiles para observaciones antes de la apertura del proceso (Decreto 1082 de 2015, Art. 2.2.1.1.2.1.4, literal b).",
+          "plantilla_redaccion_no_conformidad": "Revisado el expediente, se encontró que {hecho_encontrado_en_el_pdf} (fuente: {documento_y_pagina}), lo cual contraviene lo dispuesto en Decreto 1082 de 2015, Art. 2.2.1.1.2.1.4 lit. b, según el cual {resumen_de_texto_norma}. En consecuencia, la regla 'Publicación proyecto de pliegos (5 días hábiles)' (id SASI-02) se evalúa como NO CONFORME, toda vez que {explicacion_puntual_del_incumplimiento_basada_solo_en_los_hechos_extraidos}."
+        },
+        {
+          "id_regla": "SASI-03",
+          "nombre": "Anonimato de lances durante la subasta",
+          "norma": "Decreto 1082 de 2015, Sección 2 Subsección 2",
+          "campos_requeridos": [
+            "anonimato_lances_garantizado"
+          ],
+          "formula": {
+            "campo": "anonimato_lances_garantizado",
+            "operador": "==",
+            "valor_referencia": true
+          },
+          "texto_norma": "Durante la subasta, la entidad debe garantizar que, antes de la adjudicación, los participantes no puedan identificar las ofertas ni los lances con el oferente que los presenta (Decreto 1082 de 2015, Sección 2 Subsección 2).",
+          "plantilla_redaccion_no_conformidad": "Revisado el expediente, se encontró que {hecho_encontrado_en_el_pdf} (fuente: {documento_y_pagina}), lo cual contraviene lo dispuesto en Decreto 1082 de 2015, Sección 2 Subsección 2, según el cual {resumen_de_texto_norma}. En consecuencia, la regla 'Anonimato de lances durante la subasta' (id SASI-03) se evalúa como NO CONFORME, toda vez que {explicacion_puntual_del_incumplimiento_basada_solo_en_los_hechos_extraidos}."
+        },
+        {
+          "id_regla": "SASI-04",
+          "nombre": "Precio como factor único de evaluación",
+          "campos_requeridos": [
+            "factor_unico_evaluacion"
+          ],
+          "formula": {
+            "campo": "factor_unico_evaluacion",
+            "operador": "==",
+            "valor_referencia": "precio"
+          },
+          "texto_norma": "El objeto contractual debe corresponder a bienes o servicios de características técnicas uniformes; el precio debe ser, salvo excepción justificada, el único factor de evaluación.",
+          "plantilla_redaccion_no_conformidad": "Revisado el expediente, se encontró que {hecho_encontrado_en_el_pdf} (fuente: {documento_y_pagina}), lo cual contraviene lo dispuesto en la norma citada, según el cual {resumen_de_texto_norma}. En consecuencia, la regla 'Precio como factor único de evaluación' (id SASI-04) se evalúa como NO CONFORME, toda vez que {explicacion_puntual_del_incumplimiento_basada_solo_en_los_hechos_extraidos}."
+        },
+        {
+          "id_regla": "SASI-05",
+          "nombre": "Garantía de seriedad de la oferta (mínimo 10%)",
+          "campos_requeridos": [
+            "valor_asegurado_garantia_seriedad",
+            "valor_oferta"
+          ],
+          "formula": {
+            "izquierda": "valor_asegurado_garantia_seriedad",
+            "operador": ">=",
+            "derecha": "0.10 * valor_oferta"
+          },
+          "texto_norma": "Es obligatoria la garantía de seriedad de la oferta, con valor mínimo del 10% del valor de la oferta.",
+          "plantilla_redaccion_no_conformidad": "Revisado el expediente, se encontró que {hecho_encontrado_en_el_pdf} (fuente: {documento_y_pagina}), lo cual contraviene lo dispuesto en la norma citada, según el cual {resumen_de_texto_norma}. En consecuencia, la regla 'Garantía de seriedad de la oferta (mínimo 10%)' (id SASI-05) se evalúa como NO CONFORME, toda vez que {explicacion_puntual_del_incumplimiento_basada_solo_en_los_hechos_extraidos}."
+        }
+      ]
+    },
+    {
+      "codigo": "SA-MC",
+      "nombre_modalidad": "Selección Abreviada - Menor Cuantía",
+      "norma_base": "Ley 1150 de 2007 Art. 2 Num. 2 lit. b); Decreto 1082 de 2015 Art. 2.2.1.2.1.2.20",
+      "condicion_aplicabilidad": {
+        "formula": "0.10 * umbral_menor_cuantia_entidad < valor_proceso_smmlv <= umbral_menor_cuantia_entidad",
+        "nota_lotes": "Si el proceso está dividido en lotes, valor_proceso_smmlv debe ser la sumatoria de todos los lotes"
+      },
+      "reglas_validacion": [
+        {
+          "id_regla": "SAMC-01",
+          "nombre": "Publicación proyecto de pliegos (5 días hábiles)",
+          "norma": "Decreto 1082 de 2015, Art. 2.2.1.1.2.1.4 lit. b",
+          "campos_requeridos": [
+            "fecha_apertura_proceso",
+            "fecha_publicacion_proyecto_pliegos"
+          ],
+          "formula": {
+            "izquierda": "fecha_apertura_proceso - fecha_publicacion_proyecto_pliegos",
+            "operador": ">=",
+            "derecha": 5,
+            "unidad": "dias_habiles"
+          },
+          "texto_norma": "El proyecto de pliego debe publicarse por un mínimo de cinco (5) días hábiles para observaciones (Decreto 1082 de 2015, Art. 2.2.1.1.2.1.4, literal b).",
+          "plantilla_redaccion_no_conformidad": "Revisado el expediente, se encontró que {hecho_encontrado_en_el_pdf} (fuente: {documento_y_pagina}), lo cual contraviene lo dispuesto en Decreto 1082 de 2015, Art. 2.2.1.1.2.1.4 lit. b, según el cual {resumen_de_texto_norma}. En consecuencia, la regla 'Publicación proyecto de pliegos (5 días hábiles)' (id SAMC-01) se evalúa como NO CONFORME, toda vez que {explicacion_puntual_del_incumplimiento_basada_solo_en_los_hechos_extraidos}."
+        },
+        {
+          "id_regla": "SAMC-02",
+          "nombre": "Manifestación de interés dentro de 3 días hábiles desde apertura",
+          "norma": "Decreto 1082 de 2015, Art. 2.2.1.2.1.2.20 Num. 1",
+          "campos_requeridos": [
+            "fecha_limite_manifestacion_interes",
+            "fecha_apertura_proceso"
+          ],
+          "formula": {
+            "izquierda": "fecha_limite_manifestacion_interes - fecha_apertura_proceso",
+            "operador": "<=",
+            "derecha": 3,
+            "unidad": "dias_habiles"
+          },
+          "texto_norma": "En un término no mayor a tres (3) días hábiles contados a partir de la fecha de apertura del Proceso de Contratación, los interesados deben manifestar su intención de participar (Decreto 1082 de 2015, Art. 2.2.1.2.1.2.20, Numeral 1).",
+          "plantilla_redaccion_no_conformidad": "Revisado el expediente, se encontró que {hecho_encontrado_en_el_pdf} (fuente: {documento_y_pagina}), lo cual contraviene lo dispuesto en Decreto 1082 de 2015, Art. 2.2.1.2.1.2.20 Num. 1, según el cual {resumen_de_texto_norma}. En consecuencia, la regla 'Manifestación de interés dentro de 3 días hábiles desde apertura' (id SAMC-02) se evalúa como NO CONFORME, toda vez que {explicacion_puntual_del_incumplimiento_basada_solo_en_los_hechos_extraidos}."
+        },
+        {
+          "id_regla": "SAMC-03",
+          "nombre": "Traslado del informe de evaluación (3 días hábiles)",
+          "norma": "Ley 1882 de 2018, Art. 1 aplicado a selección abreviada",
+          "campos_requeridos": [
+            "fecha_inicio_traslado_informe_evaluacion",
+            "fecha_fin_traslado_informe_evaluacion"
+          ],
+          "formula": {
+            "izquierda": "fecha_fin_traslado_informe_evaluacion - fecha_inicio_traslado_informe_evaluacion",
+            "operador": ">=",
+            "derecha": 3,
+            "unidad": "dias_habiles"
+          },
+          "texto_norma": "El plazo de traslado del informe de evaluación (subsanación/observaciones) es de tres (3) días hábiles.",
+          "plantilla_redaccion_no_conformidad": "Revisado el expediente, se encontró que {hecho_encontrado_en_el_pdf} (fuente: {documento_y_pagina}), lo cual contraviene lo dispuesto en Ley 1882 de 2018, Art. 1 aplicado a selección abreviada, según el cual {resumen_de_texto_norma}. En consecuencia, la regla 'Traslado del informe de evaluación (3 días hábiles)' (id SAMC-03) se evalúa como NO CONFORME, toda vez que {explicacion_puntual_del_incumplimiento_basada_solo_en_los_hechos_extraidos}."
+        },
+        {
+          "id_regla": "SAMC-04",
+          "nombre": "Sorteo por más de 10 manifestaciones debe estar previsto en el pliego original",
+          "norma": "Decreto 1082 de 2015, Art. 2.2.1.2.1.2.20 Num. 2",
+          "condicion_aplicabilidad": {
+            "campo": "numero_manifestaciones_interes",
+            "operador": ">",
+            "valor_referencia": 10
+          },
+          "campos_requeridos": [
+            "sorteo_previsto_en_pliego"
+          ],
+          "formula": {
+            "campo": "sorteo_previsto_en_pliego",
+            "operador": "==",
+            "valor_referencia": true
+          },
+          "texto_norma": "Si la Entidad Estatal recibe más de diez (10) manifestaciones de interés, puede continuar el proceso o hacer un sorteo para seleccionar máximo diez (10) interesados, siempre que dicha regla haya sido prevista previamente en el pliego (Decreto 1082 de 2015, Art. 2.2.1.2.1.2.20, Numeral 2).",
+          "plantilla_redaccion_no_conformidad": "Revisado el expediente, se encontró que {hecho_encontrado_en_el_pdf} (fuente: {documento_y_pagina}), lo cual contraviene lo dispuesto en Decreto 1082 de 2015, Art. 2.2.1.2.1.2.20 Num. 2, según el cual {resumen_de_texto_norma}. En consecuencia, la regla 'Sorteo por más de 10 manifestaciones debe estar previsto en el pliego original' (id SAMC-04) se evalúa como NO CONFORME, toda vez que {explicacion_puntual_del_incumplimiento_basada_solo_en_los_hechos_extraidos}."
+        },
+        {
+          "id_regla": "SAMC-05",
+          "nombre": "Reinicio tras licitación desierta dentro de 4 meses",
+          "norma": "Ley 1150 de 2007, Art. 2 Num. 2 lit. e)",
+          "condicion_aplicabilidad": {
+            "campo": "causal_modalidad_previa",
+            "operador": "==",
+            "valor_referencia": "licitacion_declarada_desierta"
+          },
+          "campos_requeridos": [
+            "fecha_apertura_seleccion_abreviada",
+            "fecha_declaratoria_desierta"
+          ],
+          "formula": {
+            "izquierda": "fecha_apertura_seleccion_abreviada - fecha_declaratoria_desierta",
+            "operador": "<=",
+            "derecha": 4,
+            "unidad": "meses"
+          },
+          "texto_norma": "Cuando la licitación pública para un mismo objeto es declarada desierta, la entidad puede iniciar selección abreviada de menor cuantía dentro de los cuatro (4) meses siguientes a la declaratoria de desierta (Ley 1150 de 2007, Art. 2 Núm. 2 literal e).",
+          "plantilla_redaccion_no_conformidad": "Revisado el expediente, se encontró que {hecho_encontrado_en_el_pdf} (fuente: {documento_y_pagina}), lo cual contraviene lo dispuesto en Ley 1150 de 2007, Art. 2 Num. 2 lit. e), según el cual {resumen_de_texto_norma}. En consecuencia, la regla 'Reinicio tras licitación desierta dentro de 4 meses' (id SAMC-05) se evalúa como NO CONFORME, toda vez que {explicacion_puntual_del_incumplimiento_basada_solo_en_los_hechos_extraidos}."
+        }
+      ]
+    },
+    {
+      "codigo": "CM",
+      "nombre_modalidad": "Concurso de Méritos",
+      "norma_base": "Ley 80 de 1993 Art. 32 Num. 2; Ley 1150 de 2007 Art. 2 Num. 3; Decreto 1082 de 2015 Arts. 2.2.1.2.1.3.1 y ss.; Decreto 399 de 2021; Decreto 287 de 2026",
+      "condicion_aplicabilidad": {
+        "descripcion": "Objeto = consultoría (Art. 32 Num. 2 Ley 80/1993: diagnóstico, prefactibilidad, factibilidad, interventoría, asesoría técnica) o proyectos de arquitectura",
+        "formula": {
+          "campo": "objeto_contrato_tipo",
+          "operador": "IN",
+          "valor_referencia": [
+            "consultoria",
+            "interventoria",
+            "arquitectura"
+          ]
+        }
+      },
+      "reglas_validacion": [
+        {
+          "id_regla": "CM-01",
+          "nombre": "Publicación proyecto de pliegos (5 días hábiles)",
+          "norma": "Decreto 1082 de 2015, Art. 2.2.1.1.2.1.4 lit. b",
+          "campos_requeridos": [
+            "fecha_apertura_proceso",
+            "fecha_publicacion_proyecto_pliegos"
+          ],
+          "formula": {
+            "izquierda": "fecha_apertura_proceso - fecha_publicacion_proyecto_pliegos",
+            "operador": ">=",
+            "derecha": 5,
+            "unidad": "dias_habiles"
+          },
+          "texto_norma": "El proyecto de pliego de condiciones debe publicarse por un mínimo de cinco (5) días hábiles para observaciones (Decreto 1082 de 2015, Art. 2.2.1.1.2.1.4, literal b).",
+          "plantilla_redaccion_no_conformidad": "Revisado el expediente, se encontró que {hecho_encontrado_en_el_pdf} (fuente: {documento_y_pagina}), lo cual contraviene lo dispuesto en Decreto 1082 de 2015, Art. 2.2.1.1.2.1.4 lit. b, según el cual {resumen_de_texto_norma}. En consecuencia, la regla 'Publicación proyecto de pliegos (5 días hábiles)' (id CM-01) se evalúa como NO CONFORME, toda vez que {explicacion_puntual_del_incumplimiento_basada_solo_en_los_hechos_extraidos}."
+        },
+        {
+          "id_regla": "CM-02",
+          "nombre": "Publicación del informe de evaluación (3 días hábiles)",
+          "norma": "Decreto 1082 de 2015, Art. 2.2.1.2.1.3.2 Num. 2 (mod. Decreto 399/2021)",
+          "campos_requeridos": [
+            "fecha_inicio_traslado_informe_evaluacion",
+            "fecha_fin_traslado_informe_evaluacion"
+          ],
+          "formula": {
+            "izquierda": "fecha_fin_traslado_informe_evaluacion - fecha_inicio_traslado_informe_evaluacion",
+            "operador": ">=",
+            "derecha": 3,
+            "unidad": "dias_habiles"
+          },
+          "texto_norma": "La Entidad Estatal debe publicar durante tres (3) días hábiles el informe de evaluación, con la evaluación de las ofertas frente a todos los requisitos exigidos en el pliego (Decreto 1082 de 2015, Art. 2.2.1.2.1.3.2 Núm. 2, modificado por Decreto 399 de 2021).",
+          "plantilla_redaccion_no_conformidad": "Revisado el expediente, se encontró que {hecho_encontrado_en_el_pdf} (fuente: {documento_y_pagina}), lo cual contraviene lo dispuesto en Decreto 1082 de 2015, Art. 2.2.1.2.1.3.2 Num. 2 (mod. Decreto 399/2021), según el cual {resumen_de_texto_norma}. En consecuencia, la regla 'Publicación del informe de evaluación (3 días hábiles)' (id CM-02) se evalúa como NO CONFORME, toda vez que {explicacion_puntual_del_incumplimiento_basada_solo_en_los_hechos_extraidos}."
+        },
+        {
+          "id_regla": "CM-03",
+          "nombre": "Precalificación es opcional (no marcar hallazgo por su sola ausencia)",
+          "norma": "Decreto 1082 de 2015, Art. 2.2.1.2.1.3.3",
+          "campos_requeridos": [
+            "tipo_concurso"
+          ],
+          "formula": {
+            "campo": "tipo_concurso",
+            "operador": "IN",
+            "valor_referencia": [
+              "abierto",
+              "con_precalificacion"
+            ]
+          },
+          "nota": "Ambos valores son válidos; esta regla solo verifica que el campo esté informado",
+          "texto_norma": "La precalificación es opcional; el concurso de méritos puede ser abierto o con precalificación, sin que ninguna de las dos formas sea irregular per se (Decreto 1082 de 2015, Art. 2.2.1.2.1.3.3).",
+          "plantilla_redaccion_no_conformidad": "Revisado el expediente, se encontró que {hecho_encontrado_en_el_pdf} (fuente: {documento_y_pagina}), lo cual contraviene lo dispuesto en Decreto 1082 de 2015, Art. 2.2.1.2.1.3.3, según el cual {resumen_de_texto_norma}. En consecuencia, la regla 'Precalificación es opcional (no marcar hallazgo por su sola ausencia)' (id CM-03) se evalúa como NO CONFORME, toda vez que {explicacion_puntual_del_incumplimiento_basada_solo_en_los_hechos_extraidos}."
+        },
+        {
+          "id_regla": "CM-04",
+          "nombre": "Sorteo de precalificados si superan el máximo de la lista",
+          "norma": "Decreto 1082 de 2015, Art. 2.2.1.2.1.3.4",
+          "condicion_aplicabilidad": {
+            "formula": "tipo_concurso == 'con_precalificacion' AND count_interesados_que_cumplen_precalificacion > numero_maximo_lista_precalificados"
+          },
+          "campos_requeridos": [
+            "existe_acta_sorteo_precalificacion"
+          ],
+          "formula": {
+            "campo": "existe_acta_sorteo_precalificacion",
+            "operador": "==",
+            "valor_referencia": true
+          },
+          "texto_norma": "Si hay precalificación y el número de interesados que cumple las condiciones supera el máximo establecido para la lista, el aviso de convocatoria debe indicar el tipo de sorteo que se adelantará (Decreto 1082 de 2015, Art. 2.2.1.2.1.3.4).",
+          "plantilla_redaccion_no_conformidad": "Revisado el expediente, se encontró que {hecho_encontrado_en_el_pdf} (fuente: {documento_y_pagina}), lo cual contraviene lo dispuesto en Decreto 1082 de 2015, Art. 2.2.1.2.1.3.4, según el cual {resumen_de_texto_norma}. En consecuencia, la regla 'Sorteo de precalificados si superan el máximo de la lista' (id CM-04) se evalúa como NO CONFORME, toda vez que {explicacion_puntual_del_incumplimiento_basada_solo_en_los_hechos_extraidos}."
+        },
+        {
+          "id_regla": "CM-05",
+          "nombre": "El precio no puede ser factor único de evaluación",
+          "norma": "Decreto 1082 de 2015, Art. 2.2.1.2.1.3.2 Num. 1 (mod. Decreto 399/2021)",
+          "campos_requeridos": [
+            "factor_unico_evaluacion"
+          ],
+          "formula": {
+            "campo": "factor_unico_evaluacion",
+            "operador": "!=",
+            "valor_referencia": "precio"
+          },
+          "texto_norma": "La evaluación debe fundamentarse en la experiencia y la formación académica del equipo de trabajo; el precio no puede ser el factor único ni el de mayor peso determinante en la selección (Decreto 1082 de 2015, Art. 2.2.1.2.1.3.2 Núm. 1, modificado por Decreto 399 de 2021).",
+          "plantilla_redaccion_no_conformidad": "Revisado el expediente, se encontró que {hecho_encontrado_en_el_pdf} (fuente: {documento_y_pagina}), lo cual contraviene lo dispuesto en Decreto 1082 de 2015, Art. 2.2.1.2.1.3.2 Num. 1 (mod. Decreto 399/2021), según el cual {resumen_de_texto_norma}. En consecuencia, la regla 'El precio no puede ser factor único de evaluación' (id CM-05) se evalúa como NO CONFORME, toda vez que {explicacion_puntual_del_incumplimiento_basada_solo_en_los_hechos_extraidos}."
+        },
+        {
+          "id_regla": "CM-06",
+          "nombre": "Puntaje de discapacidad si usa Documentos Tipo",
+          "norma": "Decreto 287 de 2026",
+          "condicion_aplicabilidad": {
+            "campo": "usa_documentos_tipo",
+            "operador": "==",
+            "valor_referencia": true
+          },
+          "campos_requeridos": [
+            "matriz_evaluacion_incluye_puntaje_discapacidad"
+          ],
+          "formula": {
+            "campo": "matriz_evaluacion_incluye_puntaje_discapacidad",
+            "operador": "==",
+            "valor_referencia": true
+          },
+          "texto_norma": "Cuando el concurso de méritos utilice Documentos Tipo, debe incluirse el puntaje adicional a favor de empleadores de personas con discapacidad y de emprendimientos conformados por esta población (Decreto 287 de 2026).",
+          "plantilla_redaccion_no_conformidad": "Revisado el expediente, se encontró que {hecho_encontrado_en_el_pdf} (fuente: {documento_y_pagina}), lo cual contraviene lo dispuesto en Decreto 287 de 2026, según el cual {resumen_de_texto_norma}. En consecuencia, la regla 'Puntaje de discapacidad si usa Documentos Tipo' (id CM-06) se evalúa como NO CONFORME, toda vez que {explicacion_puntual_del_incumplimiento_basada_solo_en_los_hechos_extraidos}."
+        }
+      ]
+    },
+    {
+      "codigo": "MC",
+      "nombre_modalidad": "Mínima Cuantía",
+      "norma_base": "Ley 1150 de 2007 Art. 2 Num. 5; Decreto 1082 de 2015 Art. 2.2.1.2.1.5.1 y 2.2.1.2.1.5.2 (mod. Decreto 1860/2021); Ley 2069 de 2020",
+      "condicion_aplicabilidad": {
+        "formula": {
+          "campo": "valor_proceso_smmlv",
+          "operador": "<=",
+          "valor_referencia": "0.10 * umbral_menor_cuantia_entidad"
+        },
+        "nota": "Único criterio determinante es la cuantía, sin importar el tipo de objeto (salvo causales de contratación directa que igual aplicarían)"
+      },
+      "reglas_validacion": [
+        {
+          "id_regla": "MC-01",
+          "nombre": "Invitación pública por mínimo 1 día hábil",
+          "norma": "Decreto 1082 de 2015, Art. 2.2.1.2.1.5.2 Num. 3",
+          "campos_requeridos": [
+            "fecha_publicacion_proyecto_pliegos",
+            "fecha_cierre_ofertas"
+          ],
+          "formula": {
+            "izquierda": "fecha_cierre_ofertas - fecha_publicacion_proyecto_pliegos",
+            "operador": ">=",
+            "derecha": 1,
+            "unidad": "dias_habiles"
+          },
+          "texto_norma": "La invitación se hará por un término no inferior a un (1) día hábil (Decreto 1082 de 2015, Art. 2.2.1.2.1.5.2 Núm. 3).",
+          "plantilla_redaccion_no_conformidad": "Revisado el expediente, se encontró que {hecho_encontrado_en_el_pdf} (fuente: {documento_y_pagina}), lo cual contraviene lo dispuesto en Decreto 1082 de 2015, Art. 2.2.1.2.1.5.2 Num. 3, según el cual {resumen_de_texto_norma}. En consecuencia, la regla 'Invitación pública por mínimo 1 día hábil' (id MC-01) se evalúa como NO CONFORME, toda vez que {explicacion_puntual_del_incumplimiento_basada_solo_en_los_hechos_extraidos}."
+        },
+        {
+          "id_regla": "MC-02",
+          "nombre": "Informe de evaluación publicado durante 1 día hábil",
+          "norma": "Decreto 1082 de 2015, Art. 2.2.1.2.1.5.2 Num. 5",
+          "campos_requeridos": [
+            "fecha_inicio_traslado_informe_evaluacion",
+            "fecha_fin_traslado_informe_evaluacion"
+          ],
+          "formula": {
+            "izquierda": "fecha_fin_traslado_informe_evaluacion - fecha_inicio_traslado_informe_evaluacion",
+            "operador": ">=",
+            "derecha": 1,
+            "unidad": "dias_habiles"
+          },
+          "texto_norma": "La Entidad Estatal debe publicar el informe de evaluación durante un (1) día hábil (Decreto 1082 de 2015, Art. 2.2.1.2.1.5.2 Núm. 5).",
+          "plantilla_redaccion_no_conformidad": "Revisado el expediente, se encontró que {hecho_encontrado_en_el_pdf} (fuente: {documento_y_pagina}), lo cual contraviene lo dispuesto en Decreto 1082 de 2015, Art. 2.2.1.2.1.5.2 Num. 5, según el cual {resumen_de_texto_norma}. En consecuencia, la regla 'Informe de evaluación publicado durante 1 día hábil' (id MC-02) se evalúa como NO CONFORME, toda vez que {explicacion_puntual_del_incumplimiento_basada_solo_en_los_hechos_extraidos}."
+        },
+        {
+          "id_regla": "MC-03",
+          "nombre": "Adendas con mínimo 1 día hábil antes del cierre",
+          "norma": "Decreto 1860 de 2021 (mod. Art. 2.2.1.2.1.5.2)",
+          "campos_requeridos": [
+            "fecha_cierre_ofertas",
+            "fecha_publicacion_adenda"
+          ],
+          "formula": {
+            "izquierda": "fecha_cierre_ofertas - fecha_publicacion_adenda",
+            "operador": ">=",
+            "derecha": 1,
+            "unidad": "dias_habiles"
+          },
+          "texto_norma": "Las adendas para modificar la invitación tienen como límite un (1) día hábil antes de la presentación de ofertas (Decreto 1860 de 2021, que modifica Art. 2.2.1.2.1.5.2).",
+          "plantilla_redaccion_no_conformidad": "Revisado el expediente, se encontró que {hecho_encontrado_en_el_pdf} (fuente: {documento_y_pagina}), lo cual contraviene lo dispuesto en Decreto 1860 de 2021 (mod. Art. 2.2.1.2.1.5.2), según el cual {resumen_de_texto_norma}. En consecuencia, la regla 'Adendas con mínimo 1 día hábil antes del cierre' (id MC-03) se evalúa como NO CONFORME, toda vez que {explicacion_puntual_del_incumplimiento_basada_solo_en_los_hechos_extraidos}."
+        },
+        {
+          "id_regla": "MC-04",
+          "nombre": "RUP NO se exige (no marcar hallazgo por ausencia)",
+          "norma": "Decreto 1082 de 2015, Art. 2.2.1.2.1.5.1",
+          "formula": "no_evaluable_como_hallazgo",
+          "nota": "La ausencia de RUP en mínima cuantía nunca es un incumplimiento",
+          "texto_norma": "En mínima cuantía no se exige RUP a los oferentes, salvo obra pública, donde se exige verificar la Capacidad Residual (K de Contratación).",
+          "plantilla_redaccion_no_conformidad": "Revisado el expediente, se encontró que {hecho_encontrado_en_el_pdf} (fuente: {documento_y_pagina}), lo cual contraviene lo dispuesto en Decreto 1082 de 2015, Art. 2.2.1.2.1.5.1, según el cual {resumen_de_texto_norma}. En consecuencia, la regla 'RUP NO se exige (no marcar hallazgo por ausencia)' (id MC-04) se evalúa como NO CONFORME, toda vez que {explicacion_puntual_del_incumplimiento_basada_solo_en_los_hechos_extraidos}."
+        },
+        {
+          "id_regla": "MC-05",
+          "nombre": "Garantías son discrecionales (no marcar hallazgo por ausencia)",
+          "norma": "Decreto 1082 de 2015, Art. 2.2.1.2.1.5.5 (adicionado por Decreto 1860/2021)",
+          "formula": "no_evaluable_como_hallazgo",
+          "nota": "La ausencia de pólizas en mínima cuantía nunca es un incumplimiento, salvo obra pública donde se exige verificar Capacidad Residual (K de Contratación)",
+          "texto_norma": "La Entidad Estatal es libre de exigir o no garantías en el proceso de mínima cuantía (Decreto 1082 de 2015, Art. 2.2.1.2.1.5.5, adicionado por Decreto 1860 de 2021).",
+          "plantilla_redaccion_no_conformidad": "Revisado el expediente, se encontró que {hecho_encontrado_en_el_pdf} (fuente: {documento_y_pagina}), lo cual contraviene lo dispuesto en Decreto 1082 de 2015, Art. 2.2.1.2.1.5.5 (adicionado por Decreto 1860/2021), según el cual {resumen_de_texto_norma}. En consecuencia, la regla 'Garantías son discrecionales (no marcar hallazgo por ausencia)' (id MC-05) se evalúa como NO CONFORME, toda vez que {explicacion_puntual_del_incumplimiento_basada_solo_en_los_hechos_extraidos}."
+        }
+      ]
+    },
+    {
+      "codigo": "CD",
+      "nombre_modalidad": "Contratación Directa",
+      "norma_base": "Ley 1150 de 2007 Art. 2 Num. 4 (mod. Arts. 92 y 95 Ley 1474/2011); Decreto 1082 de 2015 Arts. 2.2.1.2.1.4.1 y ss.",
+      "condicion_aplicabilidad": {
+        "descripcion": "Requiere causal taxativa expresamente citada; interpretación RESTRICTIVA, sin analogía",
+        "formula": {
+          "campo": "causal_contratacion_directa",
+          "operador": "IN",
+          "valor_referencia": [
+            "urgencia_manifiesta",
+            "emprestitos",
+            "interadministrativo",
+            "ciencia_tecnologia",
+            "encargo_fiduciario_pasivos",
+            "no_pluralidad_oferentes",
+            "servicios_profesionales_apoyo_gestion",
+            "arrendamiento_adquisicion_inmuebles",
+            "defensa_reserva",
+            "banco_republica_minhacienda"
+          ]
+        }
+      },
+      "reglas_validacion": [
+        {
+          "id_regla": "CD-01",
+          "nombre": "Causal taxativa citada y soportada",
+          "campos_requeridos": [
+            "causal_contratacion_directa",
+            "existe_acto_justificacion_causal"
+          ],
+          "formula": {
+            "campo": "causal_contratacion_directa != null AND existe_acto_justificacion_causal",
+            "operador": "==",
+            "valor_referencia": true
+          },
+          "resultado_si_incumple": "hallazgo_critico: indebida escogencia de modalidad",
+          "texto_norma": "La contratación directa solo procede en las causales taxativas del Art. 2 Núm. 4 de la Ley 1150 de 2007; su interpretación es restrictiva y no puede extenderse por analogía a supuestos no previstos.",
+          "plantilla_redaccion_no_conformidad": "Revisado el expediente, se encontró que {hecho_encontrado_en_el_pdf} (fuente: {documento_y_pagina}), lo cual contraviene lo dispuesto en la norma citada, según el cual {resumen_de_texto_norma}. En consecuencia, la regla 'Causal taxativa citada y soportada' (id CD-01) se evalúa como NO CONFORME, toda vez que {explicacion_puntual_del_incumplimiento_basada_solo_en_los_hechos_extraidos}."
+        },
+        {
+          "id_regla": "CD-02",
+          "nombre": "Urgencia manifiesta: envío a órgano de control en 3 días hábiles",
+          "norma": "Ley 80 de 1993, Art. 42",
+          "condicion_aplicabilidad": {
+            "campo": "causal_contratacion_directa",
+            "operador": "==",
+            "valor_referencia": "urgencia_manifiesta"
+          },
+          "campos_requeridos": [
+            "fecha_envio_organo_control",
+            "fecha_acto_declaratoria_urgencia"
+          ],
+          "formula": {
+            "izquierda": "fecha_envio_organo_control - fecha_acto_declaratoria_urgencia",
+            "operador": "<=",
+            "derecha": 3,
+            "unidad": "dias_habiles"
+          },
+          "texto_norma": "Si la causal es urgencia manifiesta, el acto administrativo que la declara debe enviarse al organismo de control fiscal correspondiente dentro de los tres (3) días hábiles siguientes a su expedición (Ley 80 de 1993, Art. 42).",
+          "plantilla_redaccion_no_conformidad": "Revisado el expediente, se encontró que {hecho_encontrado_en_el_pdf} (fuente: {documento_y_pagina}), lo cual contraviene lo dispuesto en Ley 80 de 1993, Art. 42, según el cual {resumen_de_texto_norma}. En consecuencia, la regla 'Urgencia manifiesta: envío a órgano de control en 3 días hábiles' (id CD-02) se evalúa como NO CONFORME, toda vez que {explicacion_puntual_del_incumplimiento_basada_solo_en_los_hechos_extraidos}."
+        },
+        {
+          "id_regla": "CD-03",
+          "nombre": "No pluralidad de oferentes requiere soporte documental objetivo",
+          "condicion_aplicabilidad": {
+            "campo": "causal_contratacion_directa",
+            "operador": "==",
+            "valor_referencia": "no_pluralidad_oferentes"
+          },
+          "campos_requeridos": [
+            "existe_soporte_exclusividad_o_estudio_mercado"
+          ],
+          "formula": {
+            "campo": "existe_soporte_exclusividad_o_estudio_mercado",
+            "operador": "==",
+            "valor_referencia": true
+          },
+          "texto_norma": "Si la causal es no pluralidad de oferentes, debe demostrarse -no solo afirmarse- que existe un único proveedor del bien o servicio, mediante soporte documental objetivo (Decreto 1082 de 2015, Art. 2.2.1.2.1.4.8).",
+          "plantilla_redaccion_no_conformidad": "Revisado el expediente, se encontró que {hecho_encontrado_en_el_pdf} (fuente: {documento_y_pagina}), lo cual contraviene lo dispuesto en la norma citada, según el cual {resumen_de_texto_norma}. En consecuencia, la regla 'No pluralidad de oferentes requiere soporte documental objetivo' (id CD-03) se evalúa como NO CONFORME, toda vez que {explicacion_puntual_del_incumplimiento_basada_solo_en_los_hechos_extraidos}."
+        },
+        {
+          "id_regla": "CD-04",
+          "nombre": "Servicios profesionales/apoyo a la gestión requiere certificación de insuficiencia de planta",
+          "condicion_aplicabilidad": {
+            "campo": "causal_contratacion_directa",
+            "operador": "==",
+            "valor_referencia": "servicios_profesionales_apoyo_gestion"
+          },
+          "campos_requeridos": [
+            "existe_certificacion_insuficiencia_personal_planta"
+          ],
+          "formula": {
+            "campo": "existe_certificacion_insuficiencia_personal_planta",
+            "operador": "==",
+            "valor_referencia": true
+          },
+          "texto_norma": "Si la causal es servicios profesionales o apoyo a la gestión, la entidad debe justificar la necesidad, idoneidad y experiencia del contratista, y certificar que no cuenta con personal de planta suficiente o idóneo (Decreto 1082 de 2015, Art. 2.2.1.2.1.4.9).",
+          "plantilla_redaccion_no_conformidad": "Revisado el expediente, se encontró que {hecho_encontrado_en_el_pdf} (fuente: {documento_y_pagina}), lo cual contraviene lo dispuesto en la norma citada, según el cual {resumen_de_texto_norma}. En consecuencia, la regla 'Servicios profesionales/apoyo a la gestión requiere certificación de insuficiencia de planta' (id CD-04) se evalúa como NO CONFORME, toda vez que {explicacion_puntual_del_incumplimiento_basada_solo_en_los_hechos_extraidos}."
+        },
+        {
+          "id_regla": "CD-05",
+          "nombre": "Garantías discrecionales, requieren justificación documentada",
+          "norma": "Decreto 1082 de 2015, Art. 2.2.1.2.3.1.1",
+          "campos_requeridos": [
+            "existe_justificacion_exigencia_o_no_garantias"
+          ],
+          "formula": {
+            "campo": "existe_justificacion_exigencia_o_no_garantias",
+            "operador": "==",
+            "valor_referencia": true
+          },
+          "nota": "NO marcar hallazgo por la sola ausencia de garantía si esta regla se cumple",
+          "texto_norma": "En la contratación directa, la exigencia de garantías no es obligatoria; la decisión de exigirlas o no debe estar justificada en los estudios previos (Decreto 1082 de 2015, Art. 2.2.1.2.3.1.1).",
+          "plantilla_redaccion_no_conformidad": "Revisado el expediente, se encontró que {hecho_encontrado_en_el_pdf} (fuente: {documento_y_pagina}), lo cual contraviene lo dispuesto en Decreto 1082 de 2015, Art. 2.2.1.2.3.1.1, según el cual {resumen_de_texto_norma}. En consecuencia, la regla 'Garantías discrecionales, requieren justificación documentada' (id CD-05) se evalúa como NO CONFORME, toda vez que {explicacion_puntual_del_incumplimiento_basada_solo_en_los_hechos_extraidos}."
+        },
+        {
+          "id_regla": "CD-06",
+          "nombre": "RUP no se exige en contratación directa",
+          "formula": "no_evaluable_como_hallazgo",
+          "nota": "Solo exigible si los estudios previos de la entidad lo pidieron voluntariamente",
+          "texto_norma": "No se exige RUP para contratación directa, salvo que la entidad lo requiera voluntariamente en sus estudios previos.",
+          "plantilla_redaccion_no_conformidad": "Revisado el expediente, se encontró que {hecho_encontrado_en_el_pdf} (fuente: {documento_y_pagina}), lo cual contraviene lo dispuesto en la norma citada, según el cual {resumen_de_texto_norma}. En consecuencia, la regla 'RUP no se exige en contratación directa' (id CD-06) se evalúa como NO CONFORME, toda vez que {explicacion_puntual_del_incumplimiento_basada_solo_en_los_hechos_extraidos}."
+        }
+      ]
+    },
+    {
+      "codigo": "RE",
+      "nombre_modalidad": "Régimen Especial",
+      "norma_base": "Art. 53 Ley 2195 de 2022 (adiciona Art. 13 Ley 1150 de 2007)",
+      "condicion_aplicabilidad": {
+        "descripcion": "Aplica a entidades exceptuadas del EGCAP (Empresas Industriales y Comerciales del Estado, Sociedades de Economía Mixta, E.S.P., ciertos Fondos de Servicios Educativos)"
+      },
+      "reglas_validacion": [
+        {
+          "id_regla": "RE-01",
+          "nombre": "Publicación de actividad contractual en SECOP II dentro de 3 días hábiles",
+          "norma": "Ley 2195 de 2022, Art. 53",
+          "campos_requeridos": [
+            "fecha_publicacion_secop",
+            "fecha_expedicion_documento"
+          ],
+          "formula": {
+            "izquierda": "fecha_publicacion_secop - fecha_expedicion_documento",
+            "operador": "<=",
+            "derecha": 3,
+            "unidad": "dias_habiles"
+          },
+          "texto_norma": "Las entidades exceptuadas del EGCAP deben publicar íntegramente su actividad contractual en SECOP II, dentro de los tres (3) días hábiles siguientes a la expedición o suscripción del documento (Ley 2195 de 2022, Art. 53, que adiciona el Art. 13 de la Ley 1150 de 2007).",
+          "plantilla_redaccion_no_conformidad": "Revisado el expediente, se encontró que {hecho_encontrado_en_el_pdf} (fuente: {documento_y_pagina}), lo cual contraviene lo dispuesto en Ley 2195 de 2022, Art. 53, según el cual {resumen_de_texto_norma}. En consecuencia, la regla 'Publicación de actividad contractual en SECOP II dentro de 3 días hábiles' (id RE-01) se evalúa como NO CONFORME, toda vez que {explicacion_puntual_del_incumplimiento_basada_solo_en_los_hechos_extraidos}."
+        }
+      ]
+    }
+  ],
+  "tabla_umbrales_cuantia": {
+    "unidad": "SMMLV",
+    "fundamento": "Art. 2 Num. 2 literal b) Ley 1150 de 2007",
+    "rangos": [
+      {
+        "presupuesto_anual_entidad_min_smmlv": 1200000,
+        "presupuesto_anual_entidad_max_smmlv": null,
+        "umbral_menor_cuantia_smmlv": 1000,
+        "umbral_minima_cuantia_smmlv": 100
+      },
+      {
+        "presupuesto_anual_entidad_min_smmlv": 850000,
+        "presupuesto_anual_entidad_max_smmlv": 1199999,
+        "umbral_menor_cuantia_smmlv": 850,
+        "umbral_minima_cuantia_smmlv": 85
+      },
+      {
+        "presupuesto_anual_entidad_min_smmlv": 400000,
+        "presupuesto_anual_entidad_max_smmlv": 849999,
+        "umbral_menor_cuantia_smmlv": 650,
+        "umbral_minima_cuantia_smmlv": 65
+      },
+      {
+        "presupuesto_anual_entidad_min_smmlv": 120000,
+        "presupuesto_anual_entidad_max_smmlv": 399999,
+        "umbral_menor_cuantia_smmlv": 450,
+        "umbral_minima_cuantia_smmlv": 45
+      },
+      {
+        "presupuesto_anual_entidad_min_smmlv": 0,
+        "presupuesto_anual_entidad_max_smmlv": 119999,
+        "umbral_menor_cuantia_smmlv": 280,
+        "umbral_minima_cuantia_smmlv": 28
+      }
+    ],
+    "advertencia": "Estos rangos deben tratarse como parametrizables; verificar si existe modificación posterior aplicable al año del contrato antes de asumir vigencia."
+  },
+  "flujo_operativo_recomendado": {
+    "descripcion": "Pasos que el sistema (orquestador) debe seguir antes de invocar al modelo, y que el modelo debe seguir al analizar los PDF del expediente.",
+    "pasos": [
+      {
+        "paso": 1,
+        "nombre": "Identificación de la modalidad",
+        "instruccion": "Antes de aplicar reglas, extraer del PDF (acto de apertura, invitación, resolución de justificación, etc.) cuál es la modalidad de selección declarada por la entidad. Mapear ese texto al 'codigo' correspondiente (LP, SA-MC, SA-SI, CM, MC, CD, RE). Si el documento no declara explícitamente la modalidad, marcar 'modalidad_no_identificada' y NO asumir una por el tipo de objeto."
+      },
+      {
+        "paso": 2,
+        "nombre": "Carga selectiva de reglas",
+        "instruccion": "El orquestador debe anexar al prompt ÚNICAMENTE: (a) el bloque 'reglas_transversales' completo, y (b) el objeto de 'modalidades' cuyo 'codigo' coincida con el identificado en el paso 1. No enviar las demás modalidades — reduce ambigüedad y consumo de contexto."
+      },
+      {
+        "paso": 3,
+        "nombre": "Extracción de campos desde el PDF",
+        "instruccion": "Para cada 'campo_requerido' de cada regla aplicable, buscar el valor EXACTO en el texto de los PDF anexados (fechas, valores, existencia de documentos, cláusulas). Registrar también la página o el nombre del documento fuente de cada dato extraído."
+      },
+      {
+        "paso": 4,
+        "nombre": "Evaluación regla por regla",
+        "instruccion": "Aplicar la 'formula' de cada regla usando los valores extraídos. Si algún 'campo_requerido' no fue encontrado en los PDF, el resultado de esa regla es 'dato_faltante', nunca 'cumple' ni 'incumple'."
+      },
+      {
+        "paso": 5,
+        "nombre": "Reporte estructurado",
+        "instruccion": "Devolver la respuesta siguiendo exactamente el 'esquema_salida_esperada' definido en este archivo, sin texto libre adicional fuera de esa estructura (salvo un resumen ejecutivo opcional al final)."
+      }
+    ]
+  },
+  "instrucciones_extraccion_anti_alucinacion": [
+    "Todo valor usado para evaluar una regla debe provenir literalmente de un PDF anexado. Si el dato no está explícito, el campo queda vacío y la regla se marca 'dato_faltante'.",
+    "No inferir fechas, valores o cumplimientos a partir de prácticas usuales, del tipo de entidad, o de lo que 'normalmente se hace'. Solo lo que el documento dice.",
+    "No completar campos numéricos aproximando ('parece que fue alrededor de...'). Si el número exacto no aparece, es 'dato_faltante'.",
+    "Si dos documentos del expediente se contradicen en un mismo dato (ej. dos fechas distintas de apertura), reportarlo como 'dato_conflictivo' citando ambas fuentes, y no elegir una unilateralmente.",
+    "Citar siempre el documento y, si es posible, la página o sección de donde se extrajo cada dato usado en la evaluación.",
+    "No aplicar una regla cuya 'condicion_aplicabilidad' no se pueda verificar con los datos disponibles; marcarla como 'no_evaluable' en ese caso."
+  ],
+  "esquema_salida_esperada": {
+    "descripcion": "Estructura fija que debe devolver el modelo tras evaluar el expediente. Todas las validaciones deben usar este formato para permitir auditoría en serie.",
+    "estructura": {
+      "modalidad_identificada": {
+        "codigo": "string (uno de LP, SA-MC, SA-SI, CM, MC, CD, RE, o 'no_identificada')",
+        "fuente": "documento y página donde se identificó"
+      },
+      "campos_extraidos": [
+        {
+          "campo": "nombre del campo según diccionario_campos_entrada",
+          "valor": "valor encontrado en el PDF",
+          "fuente_documento": "nombre del archivo",
+          "fuente_pagina_o_seccion": "referencia dentro del documento"
+        }
+      ],
+      "resultados_reglas": [
+        {
+          "id_regla": "id según este archivo (ej. LP-01)",
+          "nombre_regla": "string",
+          "norma": "string",
+          "resultado": "cumple | incumple | dato_faltante | no_aplica | no_evaluable | dato_conflictivo",
+          "justificacion": "explicación breve basada solo en los datos extraídos",
+          "evidencia": "cita del documento y página que soporta el resultado"
+        }
+      ],
+      "resumen": {
+        "total_reglas_evaluadas": "entero",
+        "cumple": "entero",
+        "incumple": "entero",
+        "dato_faltante": "entero",
+        "hallazgos_criticos": [
+          "lista de id_regla marcadas como hallazgo crítico, si las hay"
+        ]
+      }
+    }
+  },
+  "instrucciones_redaccion_hallazgos": {
+    "descripcion": "Reglas que el modelo debe seguir al redactar el párrafo de no conformidad (o de conformidad) para el informe final, cuando una regla se evalúe como 'incumple'.",
+    "reglas_obligatorias": [
+      "Citar ÚNICAMENTE la norma y el artículo indicados en el campo 'texto_norma'/'norma' de la regla evaluada. No citar leyes, decretos o artículos que no estén en este archivo, aunque el modelo 'recuerde' que existen.",
+      "No inventar jurisprudencia, conceptos de relatoría, ni sentencias que no figuren explícitamente en el campo correspondiente de la regla.",
+      "Usar la 'plantilla_redaccion_no_conformidad' de la regla como esqueleto del párrafo, reemplazando cada marcador {…} únicamente con datos extraídos literalmente del expediente (con su cita de documento/página).",
+      "Si algún marcador de la plantilla no tiene dato disponible en el expediente, dejar constancia expresa de 'dato no encontrado en el expediente' en ese punto, en vez de omitirlo o inventarlo.",
+      "El párrafo redactado debe distinguir claramente: (a) el hecho encontrado, (b) la norma infringida con su artículo exacto, y (c) la consecuencia o el vacío documental identificado — sin agregar calificaciones jurídicas adicionales (p. ej. 'esto podría constituir un detrimento patrimonial') que no estén respaldadas por el propio texto de la regla.",
+      "No redactar hallazgos para reglas marcadas como 'dato_faltante', 'no_aplica' o 'no_evaluable'; en esos casos solo señalar la ausencia de información, sin calificarla como incumplimiento."
+    ]
+  }
+}

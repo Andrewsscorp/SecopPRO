@@ -13,6 +13,7 @@ import { useDashboardStore } from '@/store/useDashboardStore';
 import HackerOverlay from '@/components/loading/HackerOverlay';
 import ContractorReportModal from '@/components/modals/ContractorReportModal';
 import ColumnConfigModal from '@/components/modals/ColumnConfigModal';
+import { PdfExporterModal, usePdfExporterStore } from '@/components/pdf-exporter';
 
 const COLUMNS_CONFIG_TABLE: Record<string, { title: string, filterKey?: string, minWidth: string, render: (row: any, actions: any) => React.ReactNode }> = {
   nombre_entidad: { title: "Nombre Entidad", filterKey: "nombre_entidad", minWidth: "150px", render: row => <div className="truncate max-w-[200px]" title={row.nombre_entidad}>{row.nombre_entidad || 'N/A'}</div> },
@@ -391,7 +392,10 @@ export default function DashboardPage() {
             Reintentar Análisis
           </button>
           
-          <button className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-semibold rounded-lg hover:bg-gray-50 transition-colors shadow-sm">
+          <button 
+            onClick={() => usePdfExporterStore.getState().setIsOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-semibold rounded-lg hover:bg-gray-50 transition-colors shadow-sm"
+          >
             <FileText className="w-4 h-4" />
             Exportar PDF
           </button>
@@ -789,12 +793,16 @@ export default function DashboardPage() {
         </div>
       )}
 
+      {/* Modal Reporte Contratista */}
       {selectedNit && (
         <ContractorReportModal 
           nit={selectedNit} 
           onClose={() => setSelectedNit(null)} 
         />
       )}
+      
+      {/* Modal Exportar PDF */}
+      <PdfExporterModal jobId={jobId} />
 
       {/* MODAL CONFIGURACION DE COLUMNAS */}
       <ColumnConfigModal 

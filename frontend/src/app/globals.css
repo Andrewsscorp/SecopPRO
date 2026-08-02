@@ -1,1 +1,19 @@
 @import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+/* Corrección para que si la IA emite código, no se vea con bloque negro discordante */
+.prose pre {
+  background-color: #f8fafc !important;
+  color: #334155 !important;
+  border: 1px solid #e2e8f0;
+}
+.prose code {
+  color: #0f172a !important;
+  background-color: #f1f5f9;
+  padding: 0.125rem 0.25rem;
+  border-radius: 0.25rem;
+}
+.prose pre code {
+  background-color: transparent;
+  padding: 0;
+}
