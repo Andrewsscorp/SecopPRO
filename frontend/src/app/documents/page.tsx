@@ -5,8 +5,9 @@ import { useRouter } from 'next/navigation';
 import { 
   FileText, Search, Clock, Calendar, 
   Play, CheckCircle, AlertTriangle, 
-  Loader2, Key, ChevronRight, FileArchive
+  Loader2, Key, ChevronRight, FileArchive, Copy
 } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface HistoryRecord {
   id: string;
@@ -26,6 +27,10 @@ export default function HistoryPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [offset, setOffset] = useState(0);
+  const [duplicateModalOpen, setDuplicateModalOpen] = useState(false);
+  const [jobToDuplicate, setJobToDuplicate] = useState<string | null>(null);
+  const [newJobName, setNewJobName] = useState("");
+  const [duplicating, setDuplicating] = useState(false);
   const LIMIT = 10;
 
   useEffect(() => {
@@ -70,6 +75,39 @@ export default function HistoryPage() {
       });
     } catch (error) {
       console.error("Error opening folder:", error);
+    }
+  };
+
+  const handleDuplicate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!jobToDuplicate || !newJobName.trim()) return;
+    
+    setDuplicating(true);
+    const toastId = toast.loading('Duplicando análisis...');
+    
+    try {
+      const res = await fetch('http://localhost:8000/api/dashboard/duplicate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobId: jobToDuplicate, newName: newJobName.trim() })
+      });
+      
+      const data = await res.json();
+      
+      if (res.ok) {
+        toast.success('Análisis duplicado exitosamente', { id: toastId });
+        setDuplicateModalOpen(false);
+        setNewJobName('');
+        setJobToDuplicate(null);
+        fetchHistory(0);
+      } else {
+        toast.error(data.detail || 'Error al duplicar el análisis', { id: toastId });
+      }
+    } catch (error) {
+      toast.error('Error de conexión al servidor', { id: toastId });
+      console.error(error);
+    } finally {
+      setDuplicating(false);
     }
   };
 
@@ -205,6 +243,17 @@ export default function HistoryPage() {
                       <FileArchive className="w-5 h-5" />
                     </button>
                     <button
+                      onClick={() => {
+                        setJobToDuplicate(record.id);
+                        setNewJobName(`${record.nombre_analisis || "Análisis"} (Copia)`);
+                        setDuplicateModalOpen(true);
+                      }}
+                      title="Duplicar análisis"
+                      className="p-2.5 bg-white border border-gray-200 hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-600 text-gray-600 rounded-xl shadow-sm transition-all flex items-center justify-center shrink-0"
+                    >
+                      <Copy className="w-5 h-5" />
+                    </button>
+                    <button
                       onClick={() => router.push(`/results?jobId=${record.id}`)}
                       className="flex-1 py-2.5 px-4 bg-white border border-gray-200 hover:border-emerald-500 hover:bg-emerald-50 hover:text-emerald-700 text-gray-700 font-semibold rounded-xl shadow-sm transition-all flex items-center justify-center gap-2 group-hover:bg-emerald-600 group-hover:text-white group-hover:border-emerald-600"
                     >
@@ -234,6 +283,63 @@ export default function HistoryPage() {
           )}
         </div>
       </div>
+      
+      {/* Modal de Duplicación */}
+      {duplicateModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden border border-gray-200">
+            <div className="p-6 border-b border-gray-100">
+              <h2 className="text-xl font-bold text-gray-900">Duplicar Análisis</h2>
+              <p className="text-sm text-gray-500 mt-1">
+                Se creará una copia exacta independiente en la base de datos y se clonará la carpeta física de descargas.
+              </p>
+            </div>
+            
+            <form onSubmit={handleDuplicate} className="p-6">
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Nuevo nombre del análisis
+                </label>
+                <input
+                  type="text"
+                  required
+                  autoFocus
+                  value={newJobName}
+                  onChange={(e) => setNewJobName(e.target.value)}
+                  placeholder="Ej: Auditoría Modificada"
+                  className="w-full px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all text-gray-900 font-medium"
+                />
+              </div>
+              
+              <div className="flex gap-3 justify-end mt-8">
+                <button
+                  type="button"
+                  onClick={() => setDuplicateModalOpen(false)}
+                  disabled={duplicating}
+                  className="px-4 py-2 text-gray-600 font-medium hover:bg-gray-100 rounded-xl transition-all"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={duplicating || !newJobName.trim()}
+                  className="px-6 py-2 bg-emerald-600 text-white font-medium hover:bg-emerald-700 rounded-xl shadow-sm transition-all flex items-center gap-2 disabled:opacity-50"
+                >
+                  {duplicating ? (
+                    <><Loader2 className="w-4 h-4 animate-spin" /> Duplicando...</>
+                  ) : (
+                    <>
+                      <Copy className="w-4 h-4" />
+                      Crear Duplicado
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      
     </div>
   );
 }

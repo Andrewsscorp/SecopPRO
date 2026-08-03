@@ -268,6 +268,34 @@ async def run_scraper(req: RunScraperRequest):
             log_queue=log_queue,
             descargar_archivos=req.descargar_archivos
         )
+        
+        # Guardar en PDFsConsulta para que el motor de IA pueda leerlo
+        if result and "lista_pdfs" in result:
+            from database.database import SessionLocal
+            from database.models import PDFsConsulta
+            import datetime
+            
+            db = SessionLocal()
+            try:
+                pdf_entry = db.query(PDFsConsulta).filter(PDFsConsulta.llave_busqueda == req.llave_busqueda).first()
+                if not pdf_entry:
+                    pdf_entry = PDFsConsulta(llave_busqueda=req.llave_busqueda)
+                    db.add(pdf_entry)
+                
+                pdf_entry.cantidad_pdfs = result.get("cantidad_pdfs", 0)
+                pdf_entry.lista_pdfs = result.get("lista_pdfs", [])
+                pdf_entry.sha256_pdfs = result.get("sha256_pdfs", {})
+                pdf_entry.nombre_zip = result.get("nombre_zip", "")
+                pdf_entry.ruta_global_zip = result.get("ruta_global_zip", "")
+                pdf_entry.fecha_guardado = datetime.datetime.utcnow()
+                
+                db.commit()
+            except Exception as dbe:
+                print(f"Error al guardar PDFsConsulta: {dbe}")
+                db.rollback()
+            finally:
+                db.close()
+                
         return {"status": "success", "message": "Scraper ejecutado correctamente.", "data": result}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error en scraper: {str(e)}")

@@ -44,6 +44,13 @@ async def chat_with_ai(data: ChatMessage, db: Session = Depends(get_db)):
         elif provider == "gemini":
             # Usar REST directo para evitar problemas de proxy/SSL con el SDK de Google
             with httpx.Client(verify=False) as client:
+                # Map legacy names
+                raw_model = config.modelo
+                if raw_model == "gemini-flash-latest":
+                    raw_model = "gemini-3.5-flash"
+                elif raw_model == "gemini-pro-latest":
+                    raw_model = "gemini-3.1-pro-preview"
+                    
                 payload = {
                     "system_instruction": {
                         "parts": [{"text": "Eres el motor de IA integrado nativamente en SecopPRO. Tu propósito es asistir en la auditoría y análisis de contratos."}]
@@ -51,7 +58,7 @@ async def chat_with_ai(data: ChatMessage, db: Session = Depends(get_db)):
                     "contents": [{"parts": [{"text": data.message}]}]
                 }
                 res = client.post(
-                    f"https://generativelanguage.googleapis.com/v1beta/models/{config.modelo}:generateContent?key={api_key}",
+                    f"https://generativelanguage.googleapis.com/v1beta/models/{raw_model}:generateContent?key={api_key}",
                     json=payload,
                     timeout=60.0
                 )

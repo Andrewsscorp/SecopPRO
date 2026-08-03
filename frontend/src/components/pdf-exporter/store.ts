@@ -20,11 +20,11 @@ export interface SectionItem {
 const DEFAULT_SECTIONS: SectionItem[] = [
   { id: 'portada', name: 'Portada', description: 'Título del reporte, fecha, logo y resumen ejecutivo', enabled: true },
   { id: 'resumen', name: 'Resumen ejecutivo', description: 'Indicadores clave y métricas generales', enabled: true },
-  { id: 'resultados', name: 'Tabla de resultados', description: 'Datos principales del análisis', enabled: false },
+  { id: 'resultados', name: 'Tabla de resultados', description: 'Datos principales del análisis', enabled: true },
   { id: 'comparaciones', name: 'Comparaciones y análisis', description: 'Resultados de comparaciones automáticas', enabled: true },
-  { id: 'graficos', name: 'Gráficos y visualizaciones', description: 'Gráficos de distribución y tendencias', enabled: false },
+  { id: 'graficos', name: 'Gráficos y visualizaciones', description: 'Gráficos de distribución y tendencias', enabled: true },
   { id: 'adjudicatarios', name: 'Análisis a Adjudicatarios', description: 'Historial y evaluación de contratistas', enabled: true },
-  { id: 'conclusiones', name: 'Conclusiones y recomendaciones', description: 'Conclusiones del análisis y recomendaciones', enabled: false },
+  { id: 'conclusiones', name: 'Conclusiones y recomendaciones', description: 'Conclusiones del análisis y recomendaciones', enabled: true },
   { id: 'anexos', name: 'Anexos', description: 'Documentos relacionados y metodología', enabled: true },
 ];
 
@@ -150,7 +150,7 @@ export const usePdfExporterStore = create<PdfExporterState>((set) => ({
   },
   setReportInfo: (info) => set((state) => ({ reportInfo: { ...state.reportInfo, ...info } })),
 
-  zoom: 100,
+  zoom: 125,
   setZoom: (zoom) => set({ zoom }),
 
   isGeneratingAI: {},

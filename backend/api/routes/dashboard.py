@@ -7,6 +7,9 @@ import pandas as pd
 import json
 import asyncio
 import pathlib
+import uuid
+from datetime import datetime
+import shutil
 
 from utils.rule_engine import apply_comparisons
 from services.ocr_engine import analyze_zip_with_ocr
@@ -238,3 +241,85 @@ def open_job_folder(payload: dict = Body(...)):
         subprocess.Popen(['xdg-open', user_docs])
         
     return {"message": "Carpeta abierta exitosamente."}
+
+@router.post("/duplicate")
+def duplicate_job(payload: dict = Body(...), db: Session = Depends(get_db)):
+    job_id = payload.get("jobId")
+    new_name = payload.get("newName")
+    
+    if not job_id or not new_name:
+        raise HTTPException(status_code=400, detail="Se requiere jobId y newName")
+        
+    # Validar nombre único
+    existente = db.query(AnalisisRealizado).filter(AnalisisRealizado.nombre_analisis == new_name).first()
+    if existente:
+        raise HTTPException(status_code=400, detail="Ya existe un análisis con este nombre.")
+        
+    original = db.query(AnalisisRealizado).filter(AnalisisRealizado.id == job_id).first()
+    if not original:
+        raise HTTPException(status_code=404, detail="Análisis original no encontrado.")
+        
+    import re
+    new_id = re.sub(r'[\\/*?:"<>|]', '_', new_name).replace(' ', '_') + "_" + str(uuid.uuid4())[:6]
+    
+    # 1. Duplicar AnalisisRealizado
+    nuevo_analisis = AnalisisRealizado(
+        id=new_id,
+        nombre_analisis=new_name,
+        sha256_archivo=original.sha256_archivo,
+        nombre_documento=original.nombre_documento,
+        total_columnas=original.total_columnas,
+        columna_escogida=original.columna_escogida,
+        estado=original.estado,
+        hora_inicio=datetime.utcnow(),
+        tiempo_respuesta=original.tiempo_respuesta
+    )
+    db.add(nuevo_analisis)
+    
+    # 2. Duplicar Contratos
+    contratos = db.query(ContratoAnalisis).filter(ContratoAnalisis.id_analisis == job_id).all()
+    for c in contratos:
+        nuevo_contrato = ContratoAnalisis(
+            id=str(uuid.uuid4()),
+            id_analisis=new_id,
+            llave_busqueda=c.llave_busqueda,
+            hallazgos_ocr=c.hallazgos_ocr,
+            rag_resolutions=c.rag_resolutions
+        )
+        db.add(nuevo_contrato)
+        
+    # 3. Duplicar PdfAiCache si existe
+    from database.models import PdfAiCache
+    pdf_cache = db.query(PdfAiCache).filter(PdfAiCache.job_id == job_id).first()
+    if pdf_cache:
+        nuevo_pdf_cache = PdfAiCache(
+            job_id=new_id,
+            portada=pdf_cache.portada,
+            resumen=pdf_cache.resumen,
+            resultados=pdf_cache.resultados,
+            comparaciones=pdf_cache.comparaciones,
+            graficos=pdf_cache.graficos,
+            adjudicatarios=pdf_cache.adjudicatarios,
+            conclusiones=pdf_cache.conclusiones,
+            anexos=pdf_cache.anexos,
+            tokens_estimados=pdf_cache.tokens_estimados,
+            tokens_usados=pdf_cache.tokens_usados
+        )
+        db.add(nuevo_pdf_cache)
+        
+    # 4. Copiar carpeta de archivos físicos
+    user_docs = os.path.join(os.path.expanduser('~'), 'Documents', 'SecopPRO_Consul')
+    old_folder = os.path.join(user_docs, job_id)
+    new_folder = os.path.join(user_docs, new_id)
+    
+    if os.path.exists(old_folder):
+        try:
+            shutil.copytree(old_folder, new_folder)
+        except Exception as e:
+            db.rollback()
+            raise HTTPException(status_code=500, detail=f"Error al copiar archivos físicos: {str(e)}")
+            
+    db.commit()
+    
+    return {"message": "Análisis duplicado exitosamente.", "newJobId": new_id}
+

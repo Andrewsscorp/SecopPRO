@@ -47,7 +47,7 @@ def _extraer_url_getaction(onclick_attr: str) -> Optional[str]:
     return "https://community.secop.gov.co" + url_path
 
 
-async def _intentar_descarga(link, page, raw_dir: pathlib.Path) -> str:
+async def _intentar_descarga(link, page, raw_dir: pathlib.Path, real_name: str = "") -> str:
     """Descarga un único documento a partir de su locator. Intenta primero
     extraer la URL real del onclick (más confiable), y si no puede, recurre
     al click forzado. Lanza excepción si la descarga falla; el llamador
@@ -71,7 +71,17 @@ async def _intentar_descarga(link, page, raw_dir: pathlib.Path) -> str:
             await link.evaluate("el => el.click()")
         download = await download_info.value
 
-    safe_name = _nombre_archivo_seguro(download.suggested_filename)
+    # Determinar el nombre final
+    final_name = real_name if real_name else download.suggested_filename
+    
+    # Asegurar extensión
+    ext = os.path.splitext(download.suggested_filename)[1]
+    if not ext:
+        ext = ".pdf"
+    if not final_name.lower().endswith(ext.lower()):
+        final_name += ext
+        
+    safe_name = _nombre_archivo_seguro(final_name)
     await download.save_as(raw_dir / safe_name)
     return safe_name
 
@@ -193,11 +203,24 @@ def run_playwright_isolated_v2(job_id, llave, urlproceso_limpia, raw_dir, zip_pa
                         "a[id^='lnkDownloadLink'], a[onclick*='DownloadFile'], a[onclick*='DownloadDocument']"
                     )
                     
-                    raw_anchors = await page.evaluate(f"""() => Array.from(document.querySelectorAll("{selector_principal}")).map((a, i) => ({{
-                        id: a.id || '',
-                        index: i,
-                        text: a.innerText.trim().toLowerCase()
-                    }}))""")
+                    raw_anchors = await page.evaluate(f"""() => Array.from(document.querySelectorAll("{selector_principal}")).map((a, i) => {{
+                        let realName = a.innerText.trim();
+                        if (realName.toLowerCase() === 'descargar') {{
+                            const tr = a.closest('tr');
+                            if (tr) {{
+                                const firstCell = tr.querySelector('td');
+                                if (firstCell && firstCell.innerText.trim()) {{
+                                    realName = firstCell.innerText.trim();
+                                }}
+                            }}
+                        }}
+                        return {{
+                            id: a.id || '',
+                            index: i,
+                            text: a.innerText.trim().toLowerCase(),
+                            real_name: realName
+                        }};
+                    }})""")
                     
                     # Filtrar falsos positivos (como los botones "Detalle" en Observaciones)
                     anchors_info = [a for a in raw_anchors if 'detalle' not in a['text'] and 'detail' not in a['text']]
@@ -224,11 +247,12 @@ def run_playwright_isolated_v2(job_id, llave, urlproceso_limpia, raw_dir, zip_pa
                                 
                                 await link.wait_for(state="attached", timeout=10000)
                                 if descargar_archivos:
-                                    safe_name = await _intentar_descarga(link, page, raw_dir)
+                                    safe_name = await _intentar_descarga(link, page, raw_dir, real_name=info.get('real_name', ''))
                                 else:
-                                    text_name = await link.inner_text()
-                                    safe_name = _nombre_archivo_seguro(text_name.strip())
-                                    (raw_dir / safe_name).touch() # Crear archivo vacío representativo
+                                    safe_name = _nombre_archivo_seguro(info.get('real_name', info['text']))
+                                    if not safe_name.lower().endswith('.pdf'):
+                                        safe_name += '.pdf'
+                                    (raw_dir / safe_name).touch() # Crear archivo vacio representativo
 
                                 pdf_count += 1
                                 consecutive_errors = 0
@@ -246,13 +270,26 @@ def run_playwright_isolated_v2(job_id, llave, urlproceso_limpia, raw_dir, zip_pa
                         # cada <a> con múltiples awaits individuales — mucho más rápido
                         # en páginas con muchos enlaces.
                         anchors_info = await page.evaluate(
-                            """() => Array.from(document.querySelectorAll('a')).map((a, i) => ({
-                                href: a.getAttribute('href') || '',
-                                onclick: a.getAttribute('onclick') || '',
-                                text: (a.innerText || '').trim(),
-                                id: a.id || '',
-                                index: i
-                            }))"""
+                            """() => Array.from(document.querySelectorAll('a')).map((a, i) => {
+                                let realName = (a.innerText || '').trim();
+                                if (realName.toLowerCase() === 'descargar') {
+                                    const tr = a.closest('tr');
+                                    if (tr) {
+                                        const firstCell = tr.querySelector('td');
+                                        if (firstCell && firstCell.innerText.trim()) {
+                                            realName = firstCell.innerText.trim();
+                                        }
+                                    }
+                                }
+                                return {
+                                    href: a.getAttribute('href') || '',
+                                    onclick: a.getAttribute('onclick') || '',
+                                    text: (a.innerText || '').trim().toLowerCase(),
+                                    id: a.id || '',
+                                    index: i,
+                                    real_name: realName
+                                };
+                            })"""
                         )
                         valid_fallbacks = [
                             info for info in anchors_info
@@ -278,11 +315,12 @@ def run_playwright_isolated_v2(job_id, llave, urlproceso_limpia, raw_dir, zip_pa
                                     
                                     await link.wait_for(state="attached", timeout=10000)
                                     if descargar_archivos:
-                                        safe_name = await _intentar_descarga(link, page, raw_dir)
+                                        safe_name = await _intentar_descarga(link, page, raw_dir, real_name=info.get('real_name', ''))
                                     else:
-                                        text_name = await link.inner_text()
-                                        safe_name = _nombre_archivo_seguro(text_name.strip())
-                                        (raw_dir / safe_name).touch() # Crear archivo vacío representativo
+                                        safe_name = _nombre_archivo_seguro(info.get('real_name', info['text']))
+                                        if not safe_name.lower().endswith('.pdf'):
+                                            safe_name += '.pdf'
+                                        (raw_dir / safe_name).touch() # Crear archivo vacio representativo
                                     pdf_count += 1
                                     send_log("log", f"[SCRAPER] ✅ Guardado: {safe_name}")
                                 except Exception as e_fallback:
@@ -361,11 +399,30 @@ async def download_pdfs_for_contract_v2(job_id: str, llave: str, urlproceso, log
     raw_dir = user_docs / "DocumentosDescargados" / f"raw_{llave_safe}"
     zip_path = user_docs / "DocumentosDescargados" / f"{llave_safe}.zip"
 
-    # Si ya existe en esta corrida, retornamos vacío para no duplicar metadatos en BD
+    # Si ya existe localmente, retornamos la data consultada
     if zip_path.exists():
         if raw_dir.exists():
             shutil.rmtree(raw_dir)
-        return {}
+            
+        from database.database import SessionLocal
+        from database.models import PDFsConsulta
+        
+        db = SessionLocal()
+        try:
+            pdf_entry = db.query(PDFsConsulta).filter(PDFsConsulta.llave_busqueda == llave).first()
+            if pdf_entry:
+                return {
+                    "lista_pdfs": pdf_entry.lista_pdfs or [],
+                    "cantidad_pdfs": pdf_entry.cantidad_pdfs or 0,
+                    "sha256_pdfs": pdf_entry.sha256_pdfs or {},
+                    "nombre_zip": pdf_entry.nombre_zip or "",
+                    "ruta_global_zip": pdf_entry.ruta_global_zip or ""
+                }
+        finally:
+            db.close()
+            
+        # Si por alguna razon no est en BD pero el zip existe
+        return {"lista_pdfs": [], "cantidad_pdfs": 0, "sha256_pdfs": {}}
 
     raw_dir.mkdir(parents=True, exist_ok=True)
     zip_path.parent.mkdir(parents=True, exist_ok=True)
@@ -402,24 +459,21 @@ async def download_pdfs_for_contract_v2(job_id: str, llave: str, urlproceso, log
                 
         shutil.rmtree(raw_dir)
 
-    # Si se creó el ZIP satisfactoriamente y hay PDFs
+    ruta_ret = "No descargado en bveda"
+    # Si se cre el ZIP satisfactoriamente y hay PDFs
     if zip_path.exists() and lista_pdfs:
-        # Solo lo pasamos a la Bóveda Global si realmente se descargó la data
+        # Solo lo pasamos a la Bveda Global si realmente se descarg la data
         if descargar_archivos:
             cache_vault = pathlib.Path(r"C:\SecopPRO\CachePDFs")
             cache_vault.mkdir(parents=True, exist_ok=True)
             global_zip_path = cache_vault / f"{llave_safe}.zip"
             shutil.copy2(zip_path, global_zip_path)
             ruta_ret = str(global_zip_path)
-        else:
-            ruta_ret = "No descargado en bóveda"
-        
-        return {
-            "lista_pdfs": lista_pdfs,
-            "cantidad_pdfs": len(lista_pdfs),
-            "sha256_pdfs": sha256_pdfs,
-            "nombre_zip": f"{llave_safe}.zip",
-            "ruta_global_zip": ruta_ret
-        }
-        
-    return {}
+
+    return {
+        "lista_pdfs": lista_pdfs,
+        "cantidad_pdfs": len(lista_pdfs),
+        "sha256_pdfs": sha256_pdfs,
+        "nombre_zip": f"{llave_safe}.zip" if zip_path.exists() else "",
+        "ruta_global_zip": ruta_ret
+    }

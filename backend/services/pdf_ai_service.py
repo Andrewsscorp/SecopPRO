@@ -60,7 +60,7 @@ La portada debe contener estrictamente la siguiente estructura en formato Markdo
 
 **Periodo de Análisis:** [Infiere el periodo basándote en las fechas de los contratos]
 
-**Valor Total Auditado:** [Calcula o estima el valor total aproximado de la muestra en formato de moneda colombiana COP]
+**Valor Total Auditado:** [Usa EXACTAMENTE el valor de "valor_total_estimado" provisto en el JSON, NO lo calcules]
 
 **Fecha de Emisión del Informe:** [Inserta la fecha de hoy o del informe]
 
@@ -340,7 +340,7 @@ NO uses emojis. NO devuelvas JSON. Redacta de forma profesional y corporativa.
 class PdfAiService:
     def __init__(self):
         self.api_key = None
-        self.model = "gemini-flash-latest"
+        self.model = "gemini-3.5-flash"
         self._load_config()
 
     def _load_config(self):
@@ -350,7 +350,13 @@ class PdfAiService:
             config = db.query(ConfiguracionAPI).filter(ConfiguracionAPI.proveedor == 'gemini').first()
             if config and config.api_key_encriptada:
                 self.api_key = decrypt_data(config.api_key_encriptada)
-                self.model = config.modelo or "gemini-flash-latest"
+                raw_model = config.modelo or "gemini-3.5-flash"
+                if raw_model == "gemini-flash-latest":
+                    self.model = "gemini-3.5-flash"
+                elif raw_model == "gemini-pro-latest":
+                    self.model = "gemini-3.1-pro-preview" # Fallback if pro is selected
+                else:
+                    self.model = raw_model
         finally:
             db.close()
 
@@ -367,8 +373,15 @@ class PdfAiService:
             # Si es básico, ordenamos por valor (mayor a menor) y tomamos solo los 20 más relevantes para ahorrar tokens y acelerar
             if profundidad == "basico":
                 def get_valor(cs):
-                    v = str(cs.valor_del_contrato or "0").replace(",", "").replace(".", "").strip()
-                    return float(v) if v.isdigit() else 0.0
+                    val_str = str(cs.valor_del_contrato or "0").replace("$", "").replace("COP", "").strip()
+                    if "," in val_str and "." in val_str:
+                        val_str = val_str.replace(".", "").replace(",", ".")
+                    elif "," in val_str:
+                        val_str = val_str.replace(",", ".")
+                    try:
+                        return float(val_str)
+                    except:
+                        return 0.0
                 contratos = sorted(contratos, key=lambda x: get_valor(x[1]), reverse=True)[:20]
 
             for c, cs in contratos:
@@ -415,7 +428,12 @@ class PdfAiService:
             else:
                 def parse_val(val_str):
                     try:
-                        return float(str(val_str).replace(",", "").replace(".", "").strip())
+                        val_str = str(val_str).replace("$", "").replace("COP", "").strip()
+                        if "," in val_str and "." in val_str:
+                            val_str = val_str.replace(".", "").replace(",", ".")
+                        elif "," in val_str:
+                            val_str = val_str.replace(",", ".")
+                        return float(val_str)
                     except:
                         return 0.0
                 
@@ -476,9 +494,16 @@ class PdfAiService:
                     fechas.append(c.fecha_de_firma)
                 
                 # Intentar sumar valor
-                val_str = str(c.valor_del_contrato or "0").replace(",", "").replace(".", "").strip()
-                if val_str.isdigit():
+                val_str = str(c.valor_del_contrato or "0").replace("$", "").replace("COP", "").strip()
+                if "," in val_str and "." in val_str:
+                    val_str = val_str.replace(".", "").replace(",", ".")
+                elif "," in val_str:
+                    val_str = val_str.replace(",", ".")
+                
+                try:
                     valor_total += float(val_str)
+                except ValueError:
+                    pass
                     
             if fechas:
                 # Ordenamiento básico
@@ -536,7 +561,7 @@ class PdfAiService:
         base_wait_time = 15
         
         # Override model para básico (velocidad extrema)
-        modelo_actual = "gemini-flash-latest" if profundidad == "basico" else self.model
+        modelo_actual = "gemini-3.5-flash" if profundidad == "basico" else self.model
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{modelo_actual}:streamGenerateContent?key={self.api_key}&alt=sse"
         
         data = {
@@ -592,4 +617,4 @@ class PdfAiService:
                 yield "data: " + json.dumps({"error": f"Error de conexión: {str(e)}"}) + "\n\n"
                 return
                 
-        yield "data: " + json.dumps({"error": "No se pudo generar tras múltiples reintentos."}) + "\n\n"
+        yield "data: " + json.dumps({"error": "Límite de peticiones excedido (Error 429). La cuota de tu API de Google Gemini (15 peticiones/min) se agotó. Por favor, espera 1 minuto e inténtalo de nuevo."}) + "\n\n"

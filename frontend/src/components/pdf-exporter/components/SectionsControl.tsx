@@ -332,7 +332,7 @@ export const SectionsControl: React.FC<SectionsControlProps> = ({ jobId }) => {
         <div className="mt-4 p-3 bg-slate-50 rounded-xl border border-slate-100 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-blue-500" />
-            <span className="text-xs font-medium text-slate-600">Uso de IA Gemini</span>
+            <span className="text-xs font-medium text-slate-600">Uso de IA SecopPRO</span>
           </div>
           <div className="flex gap-3 text-[10px] font-mono text-slate-500">
             <span>Usados: <strong className="text-blue-600">{tokensUsados}</strong></span>

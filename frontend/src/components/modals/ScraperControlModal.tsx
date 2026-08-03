@@ -155,10 +155,16 @@ export default function ScraperControlModal({ isOpen, onClose, jobId }: ScraperC
         if (res.ok) {
           successCount++;
           const data = rData.data || {};
+          
+          let actionMsg = descargarFisicamente ? 'PDFs físicos descargados y guardados en base de datos' : 'Nombres de archivos extraídos y guardados en base de datos';
+          if (data.cantidad_pdfs === 0) {
+             actionMsg = descargarFisicamente ? 'Sin anexos físicos encontrados' : 'Sin nombres de anexos encontrados';
+          }
+          
           setResultsLog(prev => [{ 
             llave, 
             status: 'success', 
-            message: `${data.cantidad_pdfs || 0} archivos extraídos`, 
+            message: `${data.cantidad_pdfs || 0} archivos -> ${actionMsg}`, 
             files: data.lista_pdfs || []
           }, ...prev]);
         } else {
@@ -368,24 +374,31 @@ export default function ScraperControlModal({ isOpen, onClose, jobId }: ScraperC
         </div>
 
         {/* FOOTER ACTIONS */}
-        <div className="px-6 py-4 bg-white border-t border-slate-100 flex items-center justify-between">
+        <div className="p-4 bg-white border-t border-slate-200 flex items-center justify-between">
           <div className="text-sm font-medium text-slate-600">
             {selectedKeys.size} contratos seleccionados
           </div>
           
-          <div className="flex gap-3">
+          <div className="flex items-center gap-3">
             <button
-              disabled={selectedKeys.size === 0 || isProcessing}
-              onClick={() => executeScraper(false)}
-              className="px-5 py-2.5 bg-white border border-slate-200 text-slate-700 font-semibold rounded-xl hover:bg-slate-50 transition-colors disabled:opacity-50 flex items-center gap-2"
+              onClick={onClose}
+              className="px-4 py-2 border border-slate-300 rounded-lg text-slate-700 font-medium hover:bg-slate-50 transition-colors"
             >
-              <FileText className="w-4 h-4" />
-              Extracción Rápida (Nombres)
+              Aceptar
             </button>
             <button
+              onClick={() => executeScraper(false)}
               disabled={selectedKeys.size === 0 || isProcessing}
+              className="px-4 py-2 bg-white border border-slate-300 rounded-lg text-slate-700 font-medium hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+            >
+              <FileText className="w-4 h-4 text-slate-400" />
+              Extracción Rápida (Nombres)
+            </button>
+            
+            <button
               onClick={() => executeScraper(true)}
-              className="px-5 py-2.5 bg-indigo-600 text-white font-semibold rounded-xl hover:bg-indigo-700 shadow-md shadow-indigo-600/20 transition-all active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100 flex items-center gap-2"
+              disabled={selectedKeys.size === 0 || isProcessing}
+              className="px-4 py-2 bg-indigo-600 rounded-lg text-white font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm flex items-center gap-2"
             >
               <DownloadCloud className="w-4 h-4" />
               Modo Forense (Descargar PDFs)

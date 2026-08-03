@@ -6,13 +6,16 @@ import { WatermarkControl } from './components/WatermarkControl';
 import { ReportInfoControl } from './components/ReportInfoControl';
 import { PreviewPane } from './components/PreviewPane';
 import { X, FileText } from 'lucide-react';
+import { generatePDF } from './utils/pdfGenerator';
 
 interface PdfExporterModalProps {
   jobId: string;
 }
 
 export const PdfExporterModal: React.FC<PdfExporterModalProps> = ({ jobId }) => {
-  const { isOpen, setIsOpen } = usePdfExporterStore();
+  const { isOpen, setIsOpen, orientation } = usePdfExporterStore();
+  
+  const isLandscape = orientation === 'Horizontal';
 
   // Cerrar al presionar Esc
   useEffect(() => {
@@ -81,6 +84,7 @@ export const PdfExporterModal: React.FC<PdfExporterModalProps> = ({ jobId }) => 
                 Cancelar
               </button>
               <button 
+                onClick={() => generatePDF(isLandscape)}
                 className="flex-1 px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 shadow-sm shadow-emerald-600/20 transition-all flex items-center justify-center gap-2"
               >
                 <span>Generar PDF</span>

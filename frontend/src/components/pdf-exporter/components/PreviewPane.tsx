@@ -5,6 +5,7 @@ import rehypeRaw from 'rehype-raw';
 import mermaid from 'mermaid';
 import { usePdfExporterStore } from '../store';
 import { ChevronLeft, ChevronRight, Minus, Plus, Download } from 'lucide-react';
+import { generatePDF } from '../utils/pdfGenerator';
 
 const MermaidChart = ({ chart }: { chart: string }) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -13,24 +14,37 @@ const MermaidChart = ({ chart }: { chart: string }) => {
     if (containerRef.current && chart) {
       mermaid.initialize({
         startOnLoad: false,
-        theme: 'base',
+        theme: 'default', // El tema por defecto garantiza que los textos (títulos, ejes) sean oscuros y legibles
         securityLevel: 'loose',
         themeVariables: {
-          primaryColor: '#059669', // emerald-600
-          primaryTextColor: '#ffffff',
-          primaryBorderColor: '#047857', // emerald-700
-          lineColor: '#334155', // slate-700
-          secondaryColor: '#f8fafc', // slate-50
-          tertiaryColor: '#e2e8f0', // slate-200
-          pie1: '#059669', // emerald-600
-          pie2: '#0f172a', // slate-900
-          pie3: '#334155', // slate-700
-          pie4: '#64748b', // slate-500
-          pie5: '#94a3b8', // slate-400
-          pie6: '#cbd5e1', // slate-300
           fontFamily: 'inherit',
-          pieTitleTextSize: '18px',
-          pieLegendTextSize: '14px',
+          
+          // Colores Torta (Pie) - Verde esmeralda y Azul corporativo
+          pie1: '#1e3a8a', // Azul corporativo elegante
+          pie2: '#059669', // Verde esmeralda
+          pie3: '#334155',
+          pie4: '#64748b',
+          pie5: '#94a3b8',
+          pie6: '#cbd5e1',
+          
+          // Colores Cronograma (Gantt)
+          taskBkgColor: '#1e3a8a',
+          taskBorderColor: '#1e3a8a',
+          taskTextDarkColor: '#ffffff',
+          taskTextLightColor: '#ffffff',
+          taskTextOutsideColor: '#1e293b',
+          
+          // Para versiones que buscan xyChart dentro de themeVariables
+          xyChart: {
+            plotColorPalette: "#1e3a8a, #059669, #334155, #64748b"
+          }
+        },
+        // Para versiones que buscan xyChart en la raíz
+        xyChart: {
+          plotColorPalette: "#1e3a8a, #059669, #334155, #64748b"
+        },
+        gantt: {
+          leftPadding: 200,
         }
       });
       mermaid.render('mermaid-svg-' + Math.random().toString(36).substring(2, 9), chart)
@@ -43,10 +57,32 @@ const MermaidChart = ({ chart }: { chart: string }) => {
     }
   }, [chart]);
   
-  return <div ref={containerRef} className="my-6 flex justify-center text-slate-800" />;
+  return (
+    <>
+      <style>{`
+        /* CSS inyectable para forzar el Azul Corporativo en las barras y ancho 100% */
+        .mermaid-render-box .xy-chart-bar { fill: #1e3a8a !important; }
+        .mermaid-render-box svg { width: 100% !important; max-width: 100% !important; height: auto !important; overflow: visible !important; }
+      `}</style>
+      <div ref={containerRef} className="mermaid-render-box my-6 w-full text-slate-800" />
+    </>
+  );
 };
 
 const markdownComponents = {
+  pre({ children, ...props }: any) {
+    let isMermaid = false;
+    React.Children.forEach(children, (child) => {
+      if (React.isValidElement(child) && child.props.className?.includes('language-mermaid')) {
+        isMermaid = true;
+      }
+    });
+    
+    if (isMermaid) {
+      return <div className="w-full my-6">{children}</div>; // Sin cápsula <pre>
+    }
+    return <pre {...props}>{children}</pre>;
+  },
   code({node, inline, className, children, ...props}: any) {
     const match = /language-(\w+)/.exec(className || '');
     if (!inline && match && match[1] === 'mermaid') {
@@ -75,6 +111,25 @@ export const PreviewPane: React.FC = () => {
   const isLandscape = orientation === 'Horizontal';
   const pageAspectRatio = isLandscape ? 297 / 210 : 210 / 297;
   
+  const activePagesCount = sections.filter(s => s.enabled).length;
+  const [currentPage, setCurrentPage] = React.useState(1);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const handlePrevPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(prev => prev - 1);
+      // Scroll simple (opcional)
+      if (containerRef.current) containerRef.current.scrollBy({ top: -800, behavior: 'smooth' });
+    }
+  };
+
+  const handleNextPage = () => {
+    if (currentPage < activePagesCount) {
+      setCurrentPage(prev => prev + 1);
+      if (containerRef.current) containerRef.current.scrollBy({ top: 800, behavior: 'smooth' });
+    }
+  };
+  
   // Posiciones Flex para la marca de agua
   const getWatermarkPositionClass = () => {
     const pos = watermark.position;
@@ -102,9 +157,9 @@ export const PreviewPane: React.FC = () => {
         {/* Controles Header */}
         <div className="flex items-center gap-4 bg-white border border-slate-200 rounded-md p-1 shadow-sm">
           <div className="flex items-center gap-2 px-2 border-r border-slate-200">
-            <button className="text-slate-400 hover:text-slate-600"><ChevronLeft className="w-4 h-4" /></button>
-            <span className="text-xs font-medium text-slate-600">1 / 15</span>
-            <button className="text-slate-400 hover:text-slate-600"><ChevronRight className="w-4 h-4" /></button>
+            <button onClick={handlePrevPage} disabled={currentPage === 1} className="text-slate-400 hover:text-slate-600 disabled:opacity-50"><ChevronLeft className="w-4 h-4" /></button>
+            <span className="text-xs font-medium text-slate-600">{Math.min(currentPage, activePagesCount)} / {activePagesCount}</span>
+            <button onClick={handleNextPage} disabled={currentPage >= activePagesCount} className="text-slate-400 hover:text-slate-600 disabled:opacity-50"><ChevronRight className="w-4 h-4" /></button>
           </div>
           
           <div className="flex items-center gap-2 px-2 border-r border-slate-200">
@@ -123,7 +178,7 @@ export const PreviewPane: React.FC = () => {
             <button onClick={handleZoomIn} className="text-slate-400 hover:text-slate-600"><Plus className="w-4 h-4" /></button>
           </div>
           
-          <button className="px-2 text-slate-400 hover:text-slate-600">
+          <button onClick={() => generatePDF(isLandscape)} className="px-2 text-slate-400 hover:text-emerald-600 transition-colors" title="Descargar PDF">
             <Download className="w-4 h-4" />
           </button>
         </div>
@@ -131,7 +186,7 @@ export const PreviewPane: React.FC = () => {
 
       {/* Contenedor del documento */}
       <div className="flex-1 bg-slate-100 rounded-xl overflow-hidden border border-slate-200 relative flex items-center justify-center p-4">
-        <div className="w-full h-full overflow-auto flex items-start justify-center pt-8 pb-8 custom-scrollbar">
+        <div ref={containerRef} className="w-full h-full overflow-auto flex items-start justify-center pt-8 pb-8 custom-scrollbar">
           
           {/* Renderizado por Páginas Individuales */}
           <div className="flex flex-col gap-8 transition-all duration-300 origin-top" style={{ transform: `scale(${zoom / 100})` }}>
@@ -139,7 +194,7 @@ export const PreviewPane: React.FC = () => {
             {/* PAGINA 1: Portada */}
             {isSectionEnabled('portada') && (
               <div 
-                className="bg-white shadow-lg relative shrink-0 overflow-hidden"
+                className="pdf-page bg-white shadow-lg relative shrink-0 overflow-hidden"
                 style={{ 
                   width: isLandscape ? '297mm' : '210mm',
                   minHeight: 'auto',
@@ -183,7 +238,7 @@ export const PreviewPane: React.FC = () => {
             {/* PAGINA 2: Resumen Ejecutivo */}
             {isSectionEnabled('resumen') && (
               <div 
-                className="bg-white shadow-lg relative shrink-0 overflow-hidden"
+                className="pdf-page bg-white shadow-lg relative shrink-0 overflow-hidden"
                 style={{ 
                   width: isLandscape ? '297mm' : '210mm',
                   minHeight: 'auto',
@@ -239,7 +294,7 @@ export const PreviewPane: React.FC = () => {
             {/* PAGINA 3: Resultados */}
             {isSectionEnabled('resultados') && (
               <div 
-                className="bg-white shadow-lg relative shrink-0 overflow-hidden"
+                className="pdf-page bg-white shadow-lg relative shrink-0 overflow-hidden"
                 style={{ width: isLandscape ? '297mm' : '210mm', minHeight: 'auto' }}
               >
                 <div className="p-16 flex flex-col gap-8 h-full pointer-events-none">
@@ -266,7 +321,7 @@ export const PreviewPane: React.FC = () => {
             {/* PAGINA 4: Comparaciones y Análisis */}
             {isSectionEnabled('comparaciones') && (
               <div 
-                className="bg-white shadow-lg relative shrink-0 overflow-hidden"
+                className="pdf-page bg-white shadow-lg relative shrink-0 overflow-hidden"
                 style={{ width: isLandscape ? '297mm' : '210mm', minHeight: 'auto' }}
               >
                 <div className="p-16 flex flex-col gap-8 h-full pointer-events-none">
@@ -293,7 +348,7 @@ export const PreviewPane: React.FC = () => {
             {/* PAGINA 5: Gráficos y Visualizaciones */}
             {isSectionEnabled('graficos') && (
               <div 
-                className="bg-white shadow-lg relative shrink-0 overflow-hidden"
+                className="pdf-page bg-white shadow-lg relative shrink-0 overflow-hidden"
                 style={{ width: isLandscape ? '297mm' : '210mm', minHeight: 'auto' }}
               >
                 <div className="p-16 flex flex-col gap-8 h-full pointer-events-none">
@@ -319,7 +374,7 @@ export const PreviewPane: React.FC = () => {
             {/* PAGINA 6: Análisis a Adjudicatarios */}
             {isSectionEnabled('adjudicatarios') && (
               <div 
-                className="bg-white shadow-lg relative shrink-0 overflow-hidden"
+                className="pdf-page bg-white shadow-lg relative shrink-0 overflow-hidden"
                 style={{ width: isLandscape ? '297mm' : '210mm', minHeight: 'auto' }}
               >
                 <div className="p-16 flex flex-col gap-8 h-full pointer-events-none">
@@ -345,7 +400,7 @@ export const PreviewPane: React.FC = () => {
             {/* PAGINA 7: Conclusiones y Recomendaciones */}
             {isSectionEnabled('conclusiones') && (
               <div 
-                className="bg-white shadow-lg relative shrink-0 overflow-hidden"
+                className="pdf-page bg-white shadow-lg relative shrink-0 overflow-hidden"
                 style={{ width: isLandscape ? '297mm' : '210mm', minHeight: 'auto' }}
               >
                 <div className="p-16 flex flex-col gap-8 h-full pointer-events-none">
@@ -372,7 +427,7 @@ export const PreviewPane: React.FC = () => {
             {/* PAGINA 8: Anexos */}
             {isSectionEnabled('anexos') && (
               <div 
-                className="bg-white shadow-lg relative shrink-0 overflow-hidden"
+                className="pdf-page bg-white shadow-lg relative shrink-0 overflow-hidden"
                 style={{ width: isLandscape ? '297mm' : '210mm', minHeight: 'auto' }}
               >
                 <div className="p-16 flex flex-col gap-8 h-full pointer-events-none">

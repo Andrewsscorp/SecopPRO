@@ -65,7 +65,7 @@ El proyecto cuenta con una arquitectura Full-Stack moderna y desacoplada:
 ---
 
 ## 🏷️ Control de Versiones
-Revisar el archivo `CHANGELOG.md` para visualizar el registro histórico de mejoras y parches bajo el formato **Semantic Versioning (SemVer)**. La versión actual es la **2.6.0**, destacando el nuevo **Scraper Híbrido (Extracción Forense de Anexos)** con interfaz nativa y buscador integrado, y la **Resolución Inteligente de Reglas** vía RAG para auditar fechas directamente desde los PDFs extraídos.
+Revisar el archivo `CHANGELOG.md` para visualizar el registro histórico de mejoras y parches bajo el formato **Semantic Versioning (SemVer)**. La versión actual es la **2.7.0**, destacando la **Búsqueda Directa Nativa (API SECOP)** y la transformación de la interfaz inicial en un **Dashboard Inmersivo Full-Screen**, junto a mejoras de estabilización y exportación de PDFs perfectos a resolución extrema.
 
 ---
 > *"Diseñado con precisión algorítmica y excelencia estética."* - **SecopPRO**

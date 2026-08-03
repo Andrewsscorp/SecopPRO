@@ -12,7 +12,21 @@ Usamos el formato `X.Y.Z` (Ejemplo: `2.1.0`):
 
 ---
 
-## [2.6.0] - 2026-08-02 (Actual)
+## [2.7.0] - 2026-08-03 (Actual)
+### ✨ Nuevas Funcionalidades (Features)
+- **Búsqueda Directa en SECOP II (API):** Nueva pestaña de "Búsqueda SECOP" que permite interrogar directamente la base de datos gubernamental a través de la API Socrata (Datos Abiertos) sin necesidad de cargar un archivo de Excel previo.
+- **Centro de Comando UI (Dashboard Full-Screen):** Rediseño masivo y total de la pantalla de inicio (`UploadZone`). Transformada en una interfaz inmersiva de pantalla completa con telemetría en tiempo real, *glassmorphism*, animaciones fluidas (Framer Motion) y *feed* de inteligencia simulando los procesos de extracción.
+- **Modal de Cero Hallazgos:** Interfaz elegante y animada para manejar búsquedas sin resultados, evitando errores técnicos y ofreciendo una excelente experiencia de usuario.
+
+### 🎨 Experiencia de Usuario y Diseño (UI/UX)
+- **Exportador PDF "Pixel Perfect":** Corrección masiva en el módulo de generación de PDFs. Se ajustaron las dimensiones, márgenes y tipografías para garantizar que los gráficos de barras y los textos largos ya no aparezcan montados o cortados al exportar. Colores corporativos aplicados a las barras.
+
+### 🐛 Correcciones (Bug Fixes)
+- **Estabilización de API Socrata:** Se solventó un error crítico en el backend (`search_api.py`) donde SECOP a veces retorna campos ocultos como diccionarios (`urlproceso`), provocando caídas de la base de datos SQL.
+
+---
+
+## [2.6.0] - 2026-08-02
 ### ✨ Nuevas Funcionalidades (Features)
 - **Scraper Híbrido de Anexos (Forensics):** Nueva arquitectura de extracción profunda que permite descargar anexos físicos para calcular su `SHA256` o hacer una extracción rápida (solo nombres) de forma secuencial, protegiendo la memoria del servidor.
 - **Buscador de Extracción (ScraperControlModal):** Interfaz nativa conectada a la base de datos para buscar, filtrar (por estado y cuantía) y seleccionar múltiples contratos para extraer sus anexos simultáneamente sin ventanas emergentes de SO.
