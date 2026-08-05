@@ -593,7 +593,7 @@ class PdfAiService:
             yield from self._generate_gemini(system_instruction, payload_text, max_retries, profundidad)
 
     def _generate_local(self, system_instruction: str, payload_text: str) -> Generator[str, None, None]:
-        import os, subprocess, time
+        import os, subprocess
         
         models_dir = os.path.join("C:\\", "SecopPRO", "Models")
         model_path = os.path.join(models_dir, "qwen2.5-3b-instruct-q4_k_m.gguf")
@@ -609,7 +609,7 @@ class PdfAiService:
             f.write(prompt_formatted)
             
         try:
-            result = subprocess.run([
+            process = subprocess.Popen([
                 engine_path,
                 "-m", model_path,
                 "-f", prompt_file,
@@ -619,25 +619,19 @@ class PdfAiService:
                 "--threads", "8",
                 "--no-display-prompt",
                 "--log-disable"
-            ], capture_output=True, text=True, encoding="utf-8", timeout=120)
+            ], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, encoding="utf-8", bufsize=1)
             
-            response_text = result.stdout.strip()
-            if not response_text:
-                yield "data: " + json.dumps({"error": "La IA local no generó respuesta."}) + "\n\n"
-                return
-                
-            # Simular streaming para el frontend (5 caracteres por iteración, muy rápido)
-            chunk_size = 5
-            for i in range(0, len(response_text), chunk_size):
-                chunk = response_text[i:i+chunk_size]
-                yield "data: " + json.dumps({"chunk": chunk}) + "\n\n"
-                time.sleep(0.005)
-                
-            # Enviar uso de tokens ficticio para compatibilidad
-            yield "data: " + json.dumps({"usage": {"totalTokenCount": len(response_text) // 4}}) + "\n\n"
+            token_count = 0
+            while True:
+                char = process.stdout.read(1)
+                if not char and process.poll() is not None:
+                    break
+                if char:
+                    yield "data: " + json.dumps({"chunk": char}) + "\n\n"
+                    token_count += 1
+                    
+            yield "data: " + json.dumps({"usage": {"totalTokenCount": max(1, token_count // 4)}}) + "\n\n"
             
-        except subprocess.TimeoutExpired:
-            yield "data: " + json.dumps({"error": "Tiempo de espera agotado en la IA Local."}) + "\n\n"
         except Exception as e:
             yield "data: " + json.dumps({"error": f"Error ejecutando modelo local: {str(e)}"}) + "\n\n"
 

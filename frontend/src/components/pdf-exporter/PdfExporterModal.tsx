@@ -92,6 +92,7 @@ export const PdfExporterModal: React.FC<PdfExporterModalProps> = ({ jobId }) => 
               <X className="w-5 h-5" />
             </button>
           </div>
+        </div>
 
         {/* Cuerpo Dividido en 2 Columnas */}
         <div className="flex flex-1 overflow-hidden">
