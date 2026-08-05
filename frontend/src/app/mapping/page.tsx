@@ -42,7 +42,7 @@ export default function MappingPage() {
       formData.append('payload', JSON.stringify(payload));
 
       // 1. Validar contra el Caché Global (SECOP Warehouse)
-      const checkRes = await fetch('http://localhost:8000/api/check_cache', {
+      const checkRes = await fetch('http://127.0.0.1:8000/api/check_cache', {
         method: 'POST',
         body: formData,
       });
@@ -76,7 +76,7 @@ export default function MappingPage() {
       formData.append('file', file!);
       formData.append('payload', JSON.stringify(payload));
 
-      const res = await fetch('http://localhost:8000/api/start', {
+      const res = await fetch('http://127.0.0.1:8000/api/start', {
         method: 'POST',
         body: formData,
       });

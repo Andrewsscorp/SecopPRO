@@ -1,15 +1,17 @@
 import httpx
+import asyncio
 from sqlalchemy.orm import Session
 from database.models import ContratacionTerceros
 import logging
 
 logger = logging.getLogger(__name__)
 
-SOCRATA_URL = "https://www.datos.gov.co/resource/jbjy-vk9h.json"
+SOCRATA_SECOP2_URL = "https://www.datos.gov.co/resource/jbjy-vk9h.json"
+SOCRATA_SECOP1_URL = "https://www.datos.gov.co/resource/f789-7hwg.json"
 
 async def fetch_and_summarize_contractor(nit: str, db: Session, force_secop: bool = False):
     """
-    Descarga hasta 5000 contratos de un NIT, calcula el resumen financiero
+    Descarga hasta 5000 contratos de un NIT desde SECOP I y SECOP II, calcula el resumen financiero
     y lo guarda en ContratacionTerceros en segundo plano.
     """
     if not force_secop:
@@ -19,11 +21,22 @@ async def fetch_and_summarize_contractor(nit: str, db: Session, force_secop: boo
 
     async with httpx.AsyncClient(verify=False, timeout=60.0) as client:
         try:
-            resp = await client.get(SOCRATA_URL, params={"documento_proveedor": nit, "$limit": 5000})
-            if resp.status_code != 200:
-                logger.error(f"Error conectando a SECOP II para NIT {nit}: {resp.text}")
-                return None
-            data = resp.json()
+            req_secop2 = client.get(SOCRATA_SECOP2_URL, params={"documento_proveedor": nit, "$limit": 5000})
+            req_secop1 = client.get(SOCRATA_SECOP1_URL, params={"identificacion_del_contratista": nit, "$limit": 5000})
+            
+            resp2, resp1 = await asyncio.gather(req_secop2, req_secop1, return_exceptions=True)
+            
+            data = []
+            if isinstance(resp2, httpx.Response) and resp2.status_code == 200:
+                data.extend(resp2.json())
+            else:
+                logger.error(f"Error o timeout en SECOP II para NIT {nit}")
+
+            if isinstance(resp1, httpx.Response) and resp1.status_code == 200:
+                data.extend(resp1.json())
+            else:
+                logger.error(f"Error o timeout en SECOP I para NIT {nit}")
+                
         except Exception as e:
             logger.error(f"Fallo en la red hacia Socrata para NIT {nit}: {e}")
             return None
@@ -31,7 +44,7 @@ async def fetch_and_summarize_contractor(nit: str, db: Session, force_secop: boo
     if not data:
         return None
 
-    nombre_contratista = data[0].get("proveedor_adjudicado", "Desconocido")
+    nombre_contratista = data[0].get("proveedor_adjudicado", data[0].get("nom_razon_social_contratista", "Desconocido"))
     
     total_contratos = len(data)
     valor_total = 0.0
@@ -47,16 +60,18 @@ async def fetch_and_summarize_contractor(nit: str, db: Session, force_secop: boo
     max_val = -1.0
     
     for row in data:
-        objeto_str = row.get("descripcion_del_proceso", row.get("detalle_del_objeto_a_contratar", row.get("objeto_del_contrato", "No disponible")))
+        objeto_str = row.get("descripcion_del_proceso", row.get("detalle_del_objeto_a_contratar", row.get("objeto_del_contrato", row.get("objeto_del_contrato_a_la", "No disponible"))))
         
-        val_str = row.get("valor_del_contrato", row.get("valor_contrato", "0"))
+        val_str = row.get("valor_del_contrato", row.get("valor_contrato", row.get("valor_contrato_con_adiciones", row.get("cuantia_contrato", "0"))))
+        fecha = row.get("fecha_de_firma", row.get("fecha_de_firma_del_contrato", ""))
+        
         try:
             val = float(val_str)
             valor_total += val
             if val > max_val:
                 max_val = val
                 mayor_contrato = {
-                    "fecha": row.get("fecha_de_firma", ""),
+                    "fecha": fecha,
                     "valor": val,
                     "motivo_objeto": objeto_str
                 }
@@ -66,7 +81,6 @@ async def fetch_and_summarize_contractor(nit: str, db: Session, force_secop: boo
         entidad = row.get("entidad", row.get("nombre_entidad", "Desconocida"))
         contratos_por_entidad[entidad] = contratos_por_entidad.get(entidad, 0) + 1
         
-        fecha = row.get("fecha_de_firma", "")
         if fecha and len(fecha) >= 10:
             fecha_norm = fecha[:10]
             anio = fecha_norm[:4]

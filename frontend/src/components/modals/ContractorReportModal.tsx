@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
-import { X, Bot, AlertTriangle, FileText, BarChart3, Clock, Building, Maximize2, Minimize2, SlidersHorizontal, Copy, Check, Download, FileSpreadsheet, Image as ImageIcon, BarChart as ChartIcon } from 'lucide-react';
+import { X, Bot, AlertTriangle, FileText, BarChart3, Clock, Building, Maximize2, Minimize2, SlidersHorizontal, Copy, Check, Download, FileSpreadsheet, Image as ImageIcon, BarChart as ChartIcon, Eye } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell } from 'recharts';
 import * as htmlToImage from 'html-to-image';
@@ -38,8 +38,9 @@ export default function ContractorReportModal({ nit, onClose }: Props) {
   const expandedChartHeaderRef = useRef<HTMLDivElement>(null);
   const expandedChartContentRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    fetch(`http://localhost:8000/api/contractor/${nit}`)
+  const loadData = (forceRefresh = false) => {
+    setLoading(true);
+    fetch(`http://127.0.0.1:8000/api/contractor/${nit}${forceRefresh ? '?force_refresh=true' : ''}`)
       .then(res => res.json())
       .then(resData => {
         if (resData.status === 'success') {
@@ -50,6 +51,10 @@ export default function ContractorReportModal({ nit, onClose }: Props) {
       })
       .catch(err => setError(err.message))
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    loadData();
   }, [nit]);
 
   const allKeys = useMemo(() => {
@@ -76,7 +81,7 @@ export default function ContractorReportModal({ nit, onClose }: Props) {
 
   if (loading) {
     return (
-      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[99999] flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl w-full max-w-lg p-8 flex flex-col items-center justify-center gap-4 relative overflow-hidden shadow-2xl border border-gray-100">
           <div className="w-16 h-16 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
           <h3 className="text-lg font-bold text-gray-800">Analizando Historial...</h3>
@@ -88,7 +93,7 @@ export default function ContractorReportModal({ nit, onClose }: Props) {
 
   if (error) {
     return (
-      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[99999] flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl w-full max-w-lg p-8 relative shadow-2xl">
           <button onClick={onClose} className="absolute top-4 right-4 p-2 text-gray-400 hover:text-red-500 bg-gray-50 rounded-full transition-colors"><X className="w-5 h-5" /></button>
           <div className="flex flex-col items-center gap-3 text-center">
@@ -531,7 +536,7 @@ export default function ContractorReportModal({ nit, onClose }: Props) {
   );
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-0 sm:p-4 overflow-hidden">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[99999] flex items-center justify-center p-0 sm:p-4 overflow-hidden">
       
       {/* EXPANDED CHART MODAL */}
       {expandedChart && (
@@ -636,7 +641,19 @@ export default function ContractorReportModal({ nit, onClose }: Props) {
             </div>
             <div>
               <h2 className="text-xl font-bold text-gray-900 leading-tight">{data?.nombre}</h2>
-              <p className="text-sm text-gray-500 font-mono mt-0.5">NIT: {data?.documento} | <span className="text-emerald-600 font-medium">{data?.source === 'cache' ? 'Cargado desde Caché Rápida ⚡' : 'Extraído de Socrata SECOP II 🌐'}</span></p>
+              <div className="flex flex-wrap items-center gap-2 mt-0.5">
+                <p className="text-sm text-gray-500 font-mono">
+                  NIT: {data?.documento} | <span className="text-emerald-600 font-medium">{data?.source === 'cache' ? 'Cargado desde Caché Rápida ⚡' : 'Extraído de Socrata SECOP I & II 🌐'}</span>
+                </p>
+                <button 
+                  onClick={() => loadData(true)}
+                  className="inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-semibold rounded-md border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors shadow-sm"
+                  title="Buscar nuevos contratos y reanalizar con IA"
+                >
+                  <Eye className="w-3.5 h-3.5" />
+                  Reanalizar
+                </button>
+              </div>
             </div>
           </div>
           

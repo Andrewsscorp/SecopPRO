@@ -31,7 +31,7 @@ export default function ScraperControlModal({ isOpen, onClose, jobId }: ScraperC
   useEffect(() => {
     if (isOpen) {
       setLoading(true);
-      fetch(`http://localhost:8000/api/dashboard/search?jobId=${jobId}`)
+      fetch(`http://127.0.0.1:8000/api/dashboard/search?jobId=${jobId}`)
         .then(res => res.json())
         .then(data => setContracts(data || []))
         .catch(err => {
@@ -139,7 +139,7 @@ export default function ScraperControlModal({ isOpen, onClose, jobId }: ScraperC
       setProcessingKey(llave);
       
       try {
-        const res = await fetch('http://localhost:8000/api/pdf/run-scraper', {
+        const res = await fetch('http://127.0.0.1:8000/api/pdf/run-scraper', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

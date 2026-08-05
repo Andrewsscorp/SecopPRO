@@ -75,7 +75,7 @@ export const SectionsControl: React.FC<SectionsControlProps> = ({ jobId }) => {
     });
     setTokensUsados(0);
 
-    fetch(`http://localhost:8000/api/pdf/check-cache/${jobId}`)
+    fetch(`http://127.0.0.1:8000/api/pdf/check-cache/${jobId}`)
       .then(res => res.json())
       .then(data => {
         if (data.exists) {
@@ -121,6 +121,23 @@ export const SectionsControl: React.FC<SectionsControlProps> = ({ jobId }) => {
         }
         force_regenerate = true;
     }
+
+    if (profundidad !== 'basico' && sectionId !== 'conclusiones' && sectionId !== 'anexos' && sectionId !== 'portada') {
+        try {
+            const countRes = await fetch(`http://127.0.0.1:8000/api/pdf/contracts-count/${jobId}`);
+            if (countRes.ok) {
+                const countData = await countRes.json();
+                if (countData.count > 100) {
+                    const confirmMsg = `Es importante: El análisis actual incluye ${countData.count} contratos.\n\nLa IA tomará una muestra representativa máxima de 100 contratos (utilizando modelos estadísticos) para realizar este análisis de forma eficiente.\n\n¿Deseas continuar con esta muestra estadística?`;
+                    if (!window.confirm(confirmMsg)) {
+                        return;
+                    }
+                }
+            }
+        } catch (e) {
+            console.error("Error comprobando cantidad de contratos:", e);
+        }
+    }
     
     try {
       setIsGeneratingAI(sectionId as SectionId, true);
@@ -145,7 +162,7 @@ export const SectionsControl: React.FC<SectionsControlProps> = ({ jobId }) => {
         payload.selected_nits = usePdfExporterStore.getState().selectedContractors;
       }
 
-      const res = await fetch(`http://localhost:8000/api/pdf/${endpoint}`, {
+      const res = await fetch(`http://127.0.0.1:8000/api/pdf/${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -196,7 +213,11 @@ export const SectionsControl: React.FC<SectionsControlProps> = ({ jobId }) => {
             } catch (e) {
               console.warn("No se pudo parsear fragmento JSON:", line, e);
             }
-            if (hasError) throw new Error(hasError);
+            if (hasError) {
+              toast.error(hasError, { id: `ai-${sectionId}` });
+              setIsGeneratingAI(sectionId as SectionId, false);
+              return;
+            }
           }
         }
       }
@@ -277,7 +298,7 @@ export const SectionsControl: React.FC<SectionsControlProps> = ({ jobId }) => {
                             setShowContractorsModal(true);
                             if (availableContractors.length === 0) {
                               setLoadingContractors(true);
-                              fetch(`http://localhost:8000/api/pdf/contractors/${jobId}`)
+                              fetch(`http://127.0.0.1:8000/api/pdf/contractors/${jobId}`)
                                 .then(res => res.json())
                                 .then(data => setAvailableContractors(data.contractors || []))
                                 .catch(err => console.error(err))

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from pydantic import BaseModel
 from typing import Dict, Any
 from sqlalchemy.orm import Session
@@ -22,6 +22,10 @@ class APIKeyData(BaseModel):
 class TestConnectionData(BaseModel):
     provider: str
     api_key: str
+
+class DownloadQwenData(BaseModel):
+    mode: str
+    url: str = ""
 
 @router.post("/keys")
 async def update_keys(data: APIKeyData, db: Session = Depends(get_db)):
@@ -89,6 +93,9 @@ async def test_connection(data: TestConnectionData, db: Session = Depends(get_db
     if not key_to_use:
         raise HTTPException(status_code=400, detail="Key no proporcionada para test.")
 
+    # Tomar solo la primera llave para el test de conexión en caso de que hayan configurado múltiples (separadas por comas)
+    key_to_use = [k.strip() for k in key_to_use.split(",") if k.strip()][0]
+
     try:
         if data.provider == "groq":
             from groq import Groq
@@ -133,6 +140,142 @@ async def delete_key(provider: str, db: Session = Depends(get_db)):
 @router.get("/ping")
 async def ping():
     return {"status": "ok"}
+
+def download_file_background_sync(url: str, dest_path: str):
+    import httpx
+    import os
+    try:
+        with httpx.Client(verify=False, follow_redirects=True) as client:
+            with client.stream("GET", url) as response:
+                response.raise_for_status()
+                with open(dest_path + ".tmp", "wb") as f:
+                    for chunk in response.iter_bytes(chunk_size=8192*8):
+                        if chunk:
+                            f.write(chunk)
+        if os.path.exists(dest_path + ".tmp"):
+            os.replace(dest_path + ".tmp", dest_path)
+    except Exception as e:
+        print(f"Error descargando {url}: {e}")
+
+@router.post("/download-qwen")
+async def download_qwen(data: DownloadQwenData, background_tasks: BackgroundTasks):
+    """
+    Inicia la descarga de Qwen 2.5 localmente de manera real.
+    """
+    default_url = "https://huggingface.co/Qwen/Qwen2.5-3B-Instruct-GGUF/resolve/main/qwen2.5-3b-instruct-q4_k_m.gguf?download=true"
+    url_to_download = data.url if data.mode == "manual" and data.url else default_url
+    
+    models_dir = os.path.join("C:\\", "SecopPRO", "Models")
+    os.makedirs(models_dir, exist_ok=True)
+    model_path = os.path.join(models_dir, "qwen2.5-3b-instruct-q4_k_m.gguf")
+    
+    if os.path.exists(model_path):
+        return {"status": "success", "message": "El modelo ya está instalado.", "url_used": url_to_download}
+        
+    background_tasks.add_task(download_file_background_sync, url_to_download, model_path)
+    return {"status": "success", "message": "Iniciando descarga real de Qwen 2.5...", "url_used": url_to_download}
+
+@router.get("/download-progress")
+async def get_download_progress():
+    models_dir = os.path.join("C:\\", "SecopPRO", "Models")
+    model_path = os.path.join(models_dir, "qwen2.5-3b-instruct-q4_k_m.gguf")
+    tmp_path = model_path + ".tmp"
+    
+    TOTAL_BYTES = 2400000000 # ~2.2 GB para Qwen 3B Q4_K_M
+    
+    if os.path.exists(model_path):
+        return {"status": "success", "progress": 100}
+    
+    if os.path.exists(tmp_path):
+        current_bytes = os.path.getsize(tmp_path)
+        prog = (current_bytes / TOTAL_BYTES) * 100
+        return {"status": "success", "progress": min(prog, 99.9)}
+        
+    return {"status": "success", "progress": 0}
+
+@router.get("/qwen-status")
+async def get_qwen_status():
+    models_dir = os.path.join("C:\\", "SecopPRO", "Models")
+    os.makedirs(models_dir, exist_ok=True)
+    model_name = "qwen2.5-3b-instruct-q4_k_m.gguf"
+    model_path = os.path.join(models_dir, model_name)
+    
+    is_downloaded = os.path.exists(model_path)
+    
+    return {
+        "status": "success",
+        "is_downloaded": is_downloaded,
+        "path": model_path
+    }
+
+class PingQwenData(BaseModel):
+    prompt: str = "Hola, ¿estás en SecopPRO?"
+
+@router.post("/ping-qwen")
+async def ping_qwen(data: PingQwenData):
+    models_dir = os.path.join("C:\\", "SecopPRO", "Models")
+    model_path = os.path.join(models_dir, "qwen2.5-3b-instruct-q4_k_m.gguf")
+    
+    if not os.path.exists(model_path):
+        raise HTTPException(status_code=404, detail=f"Modelo no encontrado en {model_path}")
+        
+    try:
+        import time
+        import subprocess
+        start_time = time.time()
+        
+        # Motor nativo precompilado
+        engine_path = os.path.join("C:\\", "SecopPRO", "Engine", "llama-cli.exe")
+        if not os.path.exists(engine_path):
+            raise HTTPException(status_code=500, detail="Motor nativo (llama-cli.exe) no encontrado. La instalación del motor falló.")
+            
+        prompt_formatted = f"<|im_start|>system\nEres el asistente IA integrado en SecopPRO.<|im_end|>\n<|im_start|>user\n{data.prompt}<|im_end|>\n<|im_start|>assistant\n"
+        
+        prompt_file = os.path.join("C:\\", "SecopPRO", "Engine", "temp_prompt.txt")
+        with open(prompt_file, "w", encoding="utf-8") as f:
+            f.write(prompt_formatted)
+            
+        cmd = [
+            engine_path,
+            "-m", model_path,
+            "-f", prompt_file,
+            "-n", "50",
+            "-c", "256",
+            "--log-disable"
+        ]
+        
+        # 0x08000000 = CREATE_NO_WINDOW
+        result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="ignore", creationflags=0x08000000)
+        
+        end_time = time.time()
+        
+        # Windows agrega \r\n, por lo que limpiamos la salida
+        raw_output = result.stdout
+        
+        # Eliminar el prompt de la salida de forma segura. llama-cli filtra los tokens especiales.
+        response_text = raw_output
+        if "\nassistant" in response_text:
+            response_text = response_text.split("\nassistant")[-1].strip()
+        elif "<|im_start|>assistant" in response_text:
+            response_text = response_text.split("<|im_start|>assistant")[-1].strip()
+            
+        # Limpiar palabras extrañas que a veces deja llama-cli
+        if response_text.startswith("aquí estoy") or response_text.startswith("aqu"):
+             # It's fine, just leave it, or maybe clean up prompt bleed
+             pass
+        
+        # Si sigue vacío o tiene caracteres raros
+        if not response_text or "RAW:" in response_text:
+            response_text = "(El motor generó una respuesta vacía)"
+            
+        return {
+            "status": "success",
+            "response": response_text,
+            "latency_ms": int((end_time - start_time) * 1000)
+        }
+    except Exception as e:
+        if isinstance(e, HTTPException): raise e
+        raise HTTPException(status_code=500, detail=f"Error durante inferencia nativa: {str(e)}")
 
 class RestartData(BaseModel):
     password: str

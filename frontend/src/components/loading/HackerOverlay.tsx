@@ -30,7 +30,7 @@ export default function HackerOverlay({ jobId, onComplete, onCancel }: HackerOve
       return;
     }
 
-    const sseUrl = `http://localhost:8000/api/stream/${jobId}`;
+    const sseUrl = `http://127.0.0.1:8000/api/stream/${jobId}`;
     const eventSource = new EventSource(sseUrl);
 
     eventSource.onmessage = (event) => {
@@ -84,7 +84,7 @@ export default function HackerOverlay({ jobId, onComplete, onCancel }: HackerOve
     }
     if (!jobId) return;
     try {
-      await fetch(`http://localhost:8000/api/cancel/${jobId}`, { method: 'POST' });
+      await fetch(`http://127.0.0.1:8000/api/cancel/${jobId}`, { method: 'POST' });
       setLogs(prev => [...prev, '[SISTEMA] Enviando señal de aborto al motor (Cancelando vía SIGTERM PID)...']);
       
       // Esperar un instante para que el backend mate el proceso

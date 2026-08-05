@@ -2,12 +2,13 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
   ArrowLeft, Download, FileText, Search, 
   BarChart2, AlertTriangle, CheckCircle, 
   Settings, SlidersHorizontal, Eye, DownloadCloud,
   FileSearch, Scale, FileSignature, Database, HelpCircle, MessageSquare, X, Send,
-  Maximize2, Minimize2, RefreshCw
+  Maximize2, Minimize2, RefreshCw, Copy, Check
 } from 'lucide-react';
 import { useDashboardStore } from '@/store/useDashboardStore';
 import HackerOverlay from '@/components/loading/HackerOverlay';
@@ -18,37 +19,37 @@ import { PdfExporterModal, usePdfExporterStore } from '@/components/pdf-exporter
 
 const COLUMNS_CONFIG_TABLE: Record<string, { title: string, filterKey?: string, minWidth: string, render: (row: any, actions: any) => React.ReactNode }> = {
   nombre_entidad: { title: "Nombre Entidad", filterKey: "nombre_entidad", minWidth: "150px", render: row => <div className="truncate max-w-[200px]" title={row.nombre_entidad}>{row.nombre_entidad || 'N/A'}</div> },
-  nit_entidad: { title: "NIT Entidad", filterKey: "nit_entidad", minWidth: "120px", render: row => <div className="font-medium text-gray-700">{row.nit_entidad || 'N/A'}</div> },
+  nit_entidad: { title: "NIT Entidad", filterKey: "nit_entidad", minWidth: "120px", render: row => <div className="font-medium text-slate-700">{row.nit_entidad || 'N/A'}</div> },
   ciudad: { title: "Ciudad", filterKey: "ciudad", minWidth: "100px", render: row => row.ciudad || 'N/A' },
   nombre_contratista: { title: "Nombre Contratista", filterKey: "proveedor_adjudicado", minWidth: "150px", render: row => <div className="truncate max-w-[200px]" title={row.proveedor_adjudicado}>{row.proveedor_adjudicado || 'N/A'}</div> },
   nit_contratista: { title: "NIT/Cédula Contratista", filterKey: "documento_proveedor", minWidth: "150px", render: (row, { setSelectedNit }) => (
-    <div className="flex items-center gap-2 font-medium text-gray-700">
+    <div className="flex items-center gap-2 font-medium text-slate-700">
       {row.documento_proveedor || 'N/A'}
       {row.documento_proveedor && (
-        <button onClick={() => setSelectedNit(row.documento_proveedor)} className="text-gray-400 hover:text-emerald-600 transition-colors" title="Ver Historial del Contratista"><Eye className="w-4 h-4" /></button>
+        <button onClick={(e) => { e.stopPropagation(); setSelectedNit(row.documento_proveedor); }} className="text-slate-400 hover:text-emerald-600 transition-colors bg-white hover:bg-emerald-50 p-1.5 rounded-lg border border-slate-200" title="Ver Historial del Contratista"><Eye className="w-4 h-4" /></button>
       )}
     </div>
   )},
-  valor_contrato: { title: "Valor Contrato", filterKey: "valor_del_contrato", minWidth: "120px", render: row => <div className="font-medium">{row.valor_del_contrato || row.valor_contrato ? `$${Number(row.valor_del_contrato || row.valor_contrato).toLocaleString('es-CO')}` : 'N/A'}</div> },
+  valor_contrato: { title: "Valor Contrato", filterKey: "valor_del_contrato", minWidth: "120px", render: row => <div className="font-medium text-emerald-700">{row.valor_del_contrato || row.valor_contrato ? `$${Number(row.valor_del_contrato || row.valor_contrato).toLocaleString('es-CO')}` : 'N/A'}</div> },
   fecha_contrato: { title: "Fecha Contrato", filterKey: "fecha_de_firma", minWidth: "120px", render: row => row.fecha_de_firma || 'N/A' },
   nombre_representante: { title: "Nombre Rep. Legal", filterKey: "nombre_representante_legal", minWidth: "150px", render: row => <div className="truncate max-w-[200px]" title={row.nombre_representante_legal}>{row.nombre_representante_legal || 'N/A'}</div> },
-  identificacion_representante: { title: "Cédula/NIT Rep.", filterKey: "identificaci_n_representante_legal", minWidth: "120px", render: row => <div className="font-medium text-gray-700">{row.identificaci_n_representante_legal || 'N/A'}</div> },
+  identificacion_representante: { title: "Cédula/NIT Rep.", filterKey: "identificaci_n_representante_legal", minWidth: "120px", render: row => <div className="font-medium text-slate-700">{row.identificaci_n_representante_legal || 'N/A'}</div> },
   telefono_representante: { title: "Teléfono Rep.", filterKey: "telefono_representante_legal", minWidth: "120px", render: row => row.telefono_representante_legal || 'N/A' },
   correo_representante: { title: "Correo Rep.", filterKey: "correo_representante_legal", minWidth: "150px", render: row => <div className="text-emerald-600 truncate max-w-[200px]" title={row.correo_representante_legal}>{row.correo_representante_legal || 'N/A'}</div> },
   tipo_contrato: { title: "Tipo Contrato", filterKey: "tipo_de_contrato", minWidth: "120px", render: row => <div className="truncate max-w-[150px]" title={row.tipo_de_contrato}>{row.tipo_de_contrato || 'N/A'}</div> },
   numero_proceso: { title: "Número Proceso", filterKey: "llave_busqueda", minWidth: "120px", render: row => <div className="font-medium text-emerald-700">{row.llave_busqueda}</div> },
   regla_firma_pub: { title: "Firma +3 vs Pub", minWidth: "120px", render: row => (
-    row.regla_firma_pub_cumple === null ? <span className="text-gray-400">Sin datos</span> :
+    row.regla_firma_pub_cumple === null ? <span className="text-slate-400">Sin datos</span> :
     row.regla_firma_pub_cumple === true ? <span className="text-emerald-600 font-medium">Cumple</span> :
     <span className="text-red-600 font-medium">No cumple ({row.regla_firma_pub_diff}d)</span>
   )},
   regla_firma_inicio: { title: "Firma vs Inicio", minWidth: "120px", render: row => (
-    row.regla_firma_inicio_cumple === null ? <span className="text-gray-400">Sin datos</span> :
+    row.regla_firma_inicio_cumple === null ? <span className="text-slate-400">Sin datos</span> :
     row.regla_firma_inicio_cumple === true ? <span className="text-emerald-600 font-medium">Cumple</span> :
     <span className="text-red-600 font-medium">No cumple</span>
   )},
   regla_inicio_fin: { title: "Inicio vs Fin", minWidth: "120px", render: row => (
-    row.regla_inicio_fin_cumple === null ? <span className="text-gray-400">Sin datos</span> :
+    row.regla_inicio_fin_cumple === null ? <span className="text-slate-400">Sin datos</span> :
     row.regla_inicio_fin_cumple === true ? <span className="text-emerald-600 font-medium">Cumple</span> :
     <span className="text-red-600 font-medium">Incoherente</span>
   )},
@@ -58,7 +59,7 @@ const COLUMNS_CONFIG_TABLE: Record<string, { title: string, filterKey?: string, 
   }},
   departamento: { title: "Departamento", filterKey: "departamento", minWidth: "120px", render: row => row.departamento || 'N/A' },
   codigo_entidad: { title: "Código de Entidad", filterKey: "codigo_entidad", minWidth: "120px", render: row => row.codigo_entidad || 'N/A' },
-  urlproceso: { title: "URL del Proceso", filterKey: "urlproceso", minWidth: "150px", render: row => row.urlproceso ? <a href={row.urlproceso} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">Ver Proceso</a> : 'N/A' },
+  urlproceso: { title: "URL del Proceso", filterKey: "urlproceso", minWidth: "150px", render: row => row.urlproceso ? <a href={row.urlproceso} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Ver Proceso</a> : 'N/A' },
   fecha_de_inicio_del_contrato: { title: "Fecha Inicio", filterKey: "fecha_de_inicio_del_contrato", minWidth: "120px", render: row => row.fecha_de_inicio_del_contrato || 'N/A' },
   fecha_de_fin_del_contrato: { title: "Fecha Fin", filterKey: "fecha_de_fin_del_contrato", minWidth: "120px", render: row => row.fecha_de_fin_del_contrato || 'N/A' },
   duraci_n_del_contrato: { title: "Duración", filterKey: "duraci_n_del_contrato", minWidth: "100px", render: row => row.duraci_n_del_contrato || 'N/A' },
@@ -136,15 +137,28 @@ export default function DashboardPage() {
   const [showSmartRuleModal, setShowSmartRuleModal] = useState(false);
   const [showRetryModal, setShowRetryModal] = useState(false);
   const [retrying, setRetrying] = useState(false);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  const handleCopy = (e: React.MouseEvent, text: string, key: string) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(text);
+    setCopiedKey(key);
+    setTimeout(() => setCopiedKey(null), 2000);
+  };
   
   // Scraper Robot State
   const [scraperActive, setScraperActive] = useState(searchParams?.get('running') === 'true');
   const [scraperLog, setScraperLog] = useState("Conectando con Robot de Extracción...");
   
+  // Background API Search State
+  const [isBackgroundFetching, setIsBackgroundFetching] = useState(searchParams?.get('is_background') === 'true');
+  const [backgroundDownloaded, setBackgroundDownloaded] = useState(0);
+  
   useEffect(() => {
-    if (searchParams?.get('running') === 'true') {
+    if (searchParams?.get('running') === 'true' || searchParams?.get('is_background') === 'true') {
       const currentUrl = new URL(window.location.href);
       currentUrl.searchParams.delete('running');
+      currentUrl.searchParams.delete('is_background');
       window.history.replaceState({}, '', currentUrl.toString());
     }
   }, [searchParams]);
@@ -189,9 +203,34 @@ export default function DashboardPage() {
     return () => clearInterval(interval);
   }, [scraperActive, jobId, globalSearch]);
 
+  // Polling automático para la descarga de fondo de la API SECOP
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (isBackgroundFetching) {
+      interval = setInterval(async () => {
+        try {
+          const res = await fetch(`http://127.0.0.1:8000/api/search/status/${jobId}`);
+          if (res.ok) {
+            const data = await res.json();
+            setBackgroundDownloaded(data.descargados || 0);
+            if (data.estado === 'Completado') {
+              setIsBackgroundFetching(false);
+              toast.success(`Descarga en segundo plano completada. Total: ${data.descargados} registros.`);
+              fetchDashboardData(true);
+              fetchStats();
+            }
+          }
+        } catch (e) {
+          console.error("Error polling background status:", e);
+        }
+      }, 3000);
+    }
+    return () => clearInterval(interval);
+  }, [isBackgroundFetching, jobId]);
+
   const fetchStats = async () => {
     try {
-      const res = await fetch(`http://localhost:8000/api/dashboard/stats?jobId=${jobId}`);
+      const res = await fetch(`http://127.0.0.1:8000/api/dashboard/stats?jobId=${jobId}`);
       if (res.ok) {
         const data = await res.json();
         setStats(data);
@@ -204,7 +243,7 @@ export default function DashboardPage() {
   const fetchDashboardData = async (hideLoading = false) => {
     if (!hideLoading) setLoading(true);
     try {
-      const url = `http://localhost:8000/api/dashboard/search?jobId=${jobId}&q=${encodeURIComponent(globalSearch)}`;
+      const url = `http://127.0.0.1:8000/api/dashboard/search?jobId=${jobId}&q=${encodeURIComponent(globalSearch)}`;
       const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
@@ -228,13 +267,12 @@ export default function DashboardPage() {
     setExportingExcel(true);
     setShowExportModal(false);
     try {
-      // Pasamos las columnas que el usuario tiene activas (solo como referencia, aunque la DB tiene todo)
       const activeCols = Object.keys(selectedColumns).filter(k => selectedColumns[k as keyof typeof selectedColumns]);
       if (includeAnexo) {
         activeCols.push('informacion_anexa_tercero');
       }
       
-      const res = await fetch('http://localhost:8000/api/export/excel', {
+      const res = await fetch('http://127.0.0.1:8000/api/export/excel', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -265,8 +303,7 @@ export default function DashboardPage() {
 
   const handleDownloadZip = async (internalId: string) => {
     try {
-      // Usamos el ID interno de la tabla, o la llave_busqueda
-      const res = await fetch(`http://localhost:8000/api/export/zip/${jobId}/${internalId}`);
+      const res = await fetch(`http://127.0.0.1:8000/api/export/zip/${jobId}/${internalId}`);
       if (res.ok) {
         const blob = await res.blob();
         const url = window.URL.createObjectURL(blob);
@@ -290,7 +327,7 @@ export default function DashboardPage() {
     setIsOcrRunning(true);
     setOcrResults([]);
     try {
-      const res = await fetch('http://localhost:8000/api/dashboard/ocr', {
+      const res = await fetch('http://127.0.0.1:8000/api/dashboard/ocr', {
          method: 'POST',
          headers: {'Content-Type': 'application/json'},
          body: JSON.stringify({jobId, searchTerm: ocrSearchTerm})
@@ -298,7 +335,6 @@ export default function DashboardPage() {
       if (res.ok) {
          const data = await res.json();
          setOcrResults(data.details || []);
-         // Refresh global data so OCR appears in raw JSON viewer and Excel
          fetchDashboardData();
       } else {
          alert("Hubo un error en el motor OCR. Revisa la consola.");
@@ -313,7 +349,7 @@ export default function DashboardPage() {
     setShowRetryModal(false);
     setRetrying(true);
     try {
-      const res = await fetch('http://localhost:8000/api/retry-job', {
+      const res = await fetch('http://127.0.0.1:8000/api/retry-job', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -323,7 +359,6 @@ export default function DashboardPage() {
         })
       });
       if (res.ok) {
-        // Clear results before restarting
         setResultsData([]);
         setScraperActive(true);
       } else {
@@ -337,10 +372,9 @@ export default function DashboardPage() {
     setRetrying(false);
   };
 
-  // Helper for rendering checkboxes
   const renderToggle = (key: keyof typeof selectedColumns, label: string, tooltip: string = "") => (
     <div className="flex items-center justify-between group relative">
-      <label className="flex items-center gap-2 cursor-pointer flex-1">
+      <label className="flex items-center gap-3 cursor-pointer flex-1">
         <div className="relative flex items-center justify-center">
           <input 
             type="checkbox" 
@@ -348,47 +382,207 @@ export default function DashboardPage() {
             onChange={() => toggleColumn(key)}
             className="peer sr-only"
           />
-          <div className="w-4 h-4 border border-emerald-500 rounded bg-white peer-checked:bg-emerald-500 transition-colors flex items-center justify-center" />
-          <CheckCircle className="absolute w-3 h-3 text-white pointer-events-none opacity-0 peer-checked:opacity-100 transition-opacity" />
+          <div className="w-5 h-5 border border-slate-300 rounded-md bg-slate-50 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 transition-all flex items-center justify-center shadow-inner" />
+          <CheckCircle className="absolute w-3.5 h-3.5 text-white pointer-events-none opacity-0 peer-checked:opacity-100 transition-opacity" />
         </div>
-        <span className="text-xs font-medium text-gray-700 group-hover:text-emerald-700 transition-colors">{label}</span>
+        <span className="text-xs font-medium text-slate-600 group-hover:text-emerald-700 transition-colors">{label}</span>
       </label>
       {tooltip && (
         <div className="relative flex items-center">
-          <HelpCircle className="w-3.5 h-3.5 text-gray-400 hover:text-emerald-600 transition-colors cursor-help" />
-          <div className="absolute right-0 bottom-full mb-2 hidden group-hover:block w-48 p-2 bg-gray-900 text-white text-[10px] rounded-lg shadow-xl z-50 pointer-events-none">
-            <p className="font-bold mb-1 text-emerald-400">Campos en Excel:</p>
+          <HelpCircle className="w-4 h-4 text-slate-400 hover:text-emerald-500 transition-colors cursor-help" />
+          <div className="absolute right-0 bottom-full mb-2 hidden group-hover:block w-56 p-3 bg-white text-slate-700 text-xs rounded-xl shadow-xl z-[100] pointer-events-none border border-slate-100">
+            <p className="font-bold mb-1 text-emerald-600">Campos en Excel:</p>
             <p className="leading-relaxed">{tooltip}</p>
-            <div className="absolute top-full right-1.5 -mt-1 border-4 border-transparent border-t-gray-900"></div>
           </div>
         </div>
       )}
     </div>
   );
 
+  const renderTableContent = (isExpanded: boolean) => (
+    <div className={`bg-white shadow-sm border border-slate-200/60 flex flex-col transition-all duration-300 relative w-full h-full ${isExpanded ? 'rounded-2xl' : 'rounded-2xl overflow-hidden flex-1 min-h-[500px]'}`}>
+      <div className="px-6 py-5 border-b border-slate-200 flex items-center justify-between bg-slate-50/80 backdrop-blur-sm">
+        <h3 className="text-sm font-bold text-slate-900 flex items-center gap-3 tracking-wide">
+          <span className="bg-emerald-100 text-emerald-700 w-6 h-6 rounded-full flex items-center justify-center text-xs font-black border border-emerald-200">2</span> 
+          Vista previa del reporte {isExpanded && '(Modo Expandido)'}
+        </h3>
+        <div className="flex items-center gap-5">
+          <button 
+            onClick={() => setIsTableExpanded(!isTableExpanded)} 
+            className="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-5 py-2.5 rounded-xl hover:bg-emerald-100 flex items-center gap-2 transition-all shadow-sm hover:scale-105 hover:shadow-emerald-200"
+          >
+            {isExpanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />} 
+            {isExpanded ? 'Contraer tabla' : 'Ampliar tabla completa'}
+          </button>
+          <div className="w-px h-5 bg-slate-200"></div>
+          <button onClick={() => setShowColumnConfigModal(true)} className="text-xs font-bold text-slate-500 hover:text-emerald-600 flex items-center gap-2 transition-colors">
+            <Settings className="w-4 h-4" /> Configurar columnas
+          </button>
+          <button onClick={() => setColumnFilters({})} className="text-xs font-bold text-slate-500 hover:text-red-500 flex items-center gap-2 transition-colors">
+            <SlidersHorizontal className="w-4 h-4" /> Limpiar filtros
+          </button>
+          <span className="text-xs text-slate-500 font-bold bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm">{filteredData.length} registros</span>
+        </div>
+      </div>
+      
+      {/* Scrollable table container */}
+      <div className="flex-1 overflow-x-auto overflow-y-auto custom-scrollbar bg-white">
+        <table className="w-full text-left text-xs whitespace-nowrap min-w-[1200px] border-collapse">
+          <thead className="bg-slate-50 border-b border-slate-200 text-slate-700 font-bold sticky top-0 shadow-sm z-30">
+            <tr>
+              {columnOrder.map(colKey => {
+                if (!selectedColumns[colKey as keyof typeof selectedColumns]) return null;
+                const config = COLUMNS_CONFIG_TABLE[colKey as string] || { title: colKey, filterKey: colKey, minWidth: "120px", render: (r: any) => "N/A" };
+                return (
+                  <th key={colKey} className="px-5 py-4 align-top bg-slate-50" style={{ minWidth: config.minWidth }}>
+                    <div className="tracking-wide uppercase text-[10px] text-slate-500 mb-2">{config.title}</div>
+                    {config.filterKey && (
+                      <input type="text" placeholder="Filtrar..." className="w-full text-[11px] p-2 border border-slate-200 rounded-lg font-normal shadow-inner bg-white focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all text-slate-800 placeholder-slate-400" value={columnFilters[config.filterKey] || ''} onChange={(e) => setColumnFilters({...columnFilters, [config.filterKey!]: e.target.value})} />
+                    )}
+                  </th>
+                );
+              })}
+              <th className="px-5 py-4 text-center align-top min-w-[100px] bg-slate-50"><div className="tracking-wide uppercase text-[10px] text-slate-500">Acciones</div></th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100 text-slate-700">
+            {loading ? (
+              <tr>
+                <td colSpan={columnOrder.length + 1} className="px-6 py-20 text-center text-slate-400 font-medium bg-slate-50/50">
+                  <div className="flex flex-col items-center justify-center gap-3">
+                     <RefreshCw className="w-6 h-6 animate-spin text-emerald-500" />
+                     Cargando datos...
+                  </div>
+                </td>
+              </tr>
+            ) : filteredData.length === 0 ? (
+              <tr>
+                <td colSpan={columnOrder.length + 1} className="px-6 py-20 text-center text-slate-500 font-medium bg-slate-50/50">
+                  No hay registros que coincidan con los filtros aplicados en la base de datos.
+                </td>
+              </tr>
+            ) : (
+              filteredData.map((row, idx) => (
+                <tr key={row.internal_id || idx} className="hover:bg-emerald-50/30 transition-colors group">
+                  {columnOrder.map(colKey => {
+                    if (!selectedColumns[colKey as keyof typeof selectedColumns]) return null;
+                    const config = COLUMNS_CONFIG_TABLE[colKey as string];
+                    if (!config) return <td key={colKey} className="px-5 py-2">N/A</td>;
+                    
+                    return (
+                      <td key={colKey} className="px-3 py-2 group/cell">
+                        <div className="transition-all duration-300 ease-out group-hover/cell:bg-white group-hover/cell:scale-[1.1] group-hover/cell:shadow-xl group-hover/cell:shadow-emerald-900/10 group-hover/cell:-translate-y-1 group-hover/cell:z-20 relative rounded-xl p-3 border border-transparent group-hover/cell:border-emerald-200 flex items-center justify-between gap-3 min-h-[50px] cursor-default">
+                           <div className="flex-1 min-w-0">
+                             {config.render(row, { setSelectedNit })}
+                           </div>
+                           
+                           {/* Copy Button */}
+                           <button 
+                             onClick={(e) => {
+                               let valueToCopy = "";
+                               if (colKey === 'regla_firma_pub') valueToCopy = row.regla_firma_pub_cumple === true ? 'Cumple' : 'No cumple';
+                               else if (colKey === 'regla_firma_inicio') valueToCopy = row.regla_firma_inicio_cumple === true ? 'Cumple' : 'No cumple';
+                               else if (colKey === 'regla_inicio_fin') valueToCopy = row.regla_inicio_fin_cumple === true ? 'Cumple' : 'Incoherente';
+                               else if (colKey === 'valor_contrato') valueToCopy = String(row.valor_del_contrato || row.valor_contrato || '');
+                               else if (colKey === 'estado') valueToCopy = (row.regla_firma_pub_cumple === false || row.regla_firma_inicio_cumple === false || row.regla_inicio_fin_cumple === false) ? 'Alerta' : 'Aprobado';
+                               else valueToCopy = String(row[config.filterKey || colKey] || '');
+                               
+                               handleCopy(e, valueToCopy, `${row.internal_id || idx}-${colKey}`);
+                             }}
+                             className="opacity-0 group-hover/cell:opacity-100 p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all flex-shrink-0"
+                             title="Copiar dato"
+                           >
+                             {copiedKey === `${row.internal_id || idx}-${colKey}` ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
+                           </button>
+                        </div>
+                      </td>
+                    );
+                  })}
+                  
+                  <td className="px-5 py-2 text-center group/cell">
+                    <div className="flex items-center justify-center gap-2 transition-all duration-300 ease-out group-hover/cell:bg-white group-hover/cell:scale-[1.1] group-hover/cell:shadow-xl group-hover/cell:-translate-y-1 group-hover/cell:z-20 relative rounded-xl p-3 border border-transparent group-hover/cell:border-emerald-200 min-h-[50px]">
+                      <button 
+                        onClick={() => setSelectedContrato(row)}
+                        className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-100 rounded-lg transition-all border border-transparent hover:border-emerald-200"
+                        title="Ver detalle JSON Raw"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </button>
+                      <button 
+                        onClick={() => handleDownloadZip(row.internal_id)}
+                        className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-100 rounded-lg transition-all border border-transparent hover:border-blue-200"
+                        title="Descargar ZIP local"
+                      >
+                        <DownloadCloud className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+      
+      <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between rounded-b-2xl">
+        <span className="text-xs font-medium text-slate-500">Mostrando {filteredData.length} registros en total</span>
+        {/* Minimal Pagination placeholder */}
+        <div className="flex gap-2">
+          <button className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs font-bold text-slate-500 bg-white hover:bg-slate-50 transition-colors shadow-sm">&lt;</button>
+          <button className="px-3.5 py-1.5 border border-emerald-500/50 rounded-lg text-xs font-bold text-emerald-700 bg-emerald-50 shadow-sm">1</button>
+          <button className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs font-bold text-slate-500 bg-white hover:bg-slate-50 transition-colors shadow-sm">&gt;</button>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
-    <div className="min-h-screen bg-[#f3f4f6] flex flex-col font-sans">
+    <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-800 selection:bg-emerald-100 selection:text-emerald-900">
+      
+      {/* HEADER AMBIENT GLOW */}
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-4xl h-32 bg-emerald-100/50 blur-[100px] pointer-events-none" />
+
       {/* HEADER */}
-      <header className="bg-white border-b border-gray-200 py-3 px-6 sticky top-0 z-20 flex items-center justify-between shadow-sm">
+      <header className="bg-white/80 backdrop-blur-2xl border-b border-slate-200/60 py-4 px-6 sticky top-0 z-20 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-4">
-          <button onClick={() => router.push('/mapping')} className="p-2 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors">
+          <button onClick={() => router.push('/mapping')} className="p-2.5 bg-slate-50 hover:bg-slate-100 rounded-xl text-slate-500 hover:text-emerald-600 transition-all border border-slate-200/60 shadow-sm">
             <ArrowLeft className="w-5 h-5" />
           </button>
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/20 border border-emerald-400/20">
               <Database className="w-5 h-5 text-white" />
             </div>
-            <h1 className="text-xl font-bold text-gray-900 tracking-tight">SecopPRO</h1>
-            <span className="text-gray-400 text-lg mx-2">|</span>
-            <h2 className="text-lg text-gray-600 font-medium">Dashboard de Resultados y Vista Previa de Exportación</h2>
+            <div>
+              <h1 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+                SecopPRO 
+                <span className="px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-[10px] text-emerald-700 uppercase tracking-widest font-semibold">Forensic</span>
+              </h1>
+              <h2 className="text-xs text-slate-500 font-medium mt-0.5">Dashboard de Resultados y Exportación</h2>
+            </div>
           </div>
         </div>
         
         <div className="flex items-center gap-3">
+          <AnimatePresence>
+            {isBackgroundFetching && (
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.9, x: 20 }}
+                animate={{ opacity: 1, scale: 1, x: 0 }}
+                exit={{ opacity: 0, scale: 0.9, x: 20 }}
+                className="flex items-center gap-3 bg-white border border-emerald-200 px-4 py-2 rounded-xl shadow-lg shadow-emerald-500/10 mr-2"
+              >
+                <RefreshCw className="w-4 h-4 text-emerald-500 animate-spin" />
+                <div className="flex flex-col">
+                  <span className="text-[9px] font-black text-emerald-600 uppercase tracking-wider">Descargando Histórico</span>
+                  <span className="text-xs font-bold text-slate-700">{backgroundDownloaded.toLocaleString('es-CO')} registros</span>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
           <button 
             onClick={() => setShowRetryModal(true)}
             disabled={exportingExcel || loading || retrying || scraperActive}
-            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-lg hover:bg-indigo-700 transition-colors shadow-sm disabled:opacity-50"
+            className="flex items-center gap-2 px-5 py-2.5 bg-indigo-50 border border-indigo-200 text-indigo-700 text-sm font-semibold rounded-xl hover:bg-indigo-100 transition-all shadow-sm disabled:opacity-50"
           >
             <RefreshCw className={`w-4 h-4 ${retrying ? 'animate-spin' : ''}`} />
             Reintentar Análisis
@@ -396,7 +590,7 @@ export default function DashboardPage() {
           
           <button 
             onClick={() => usePdfExporterStore.getState().setIsOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-semibold rounded-lg hover:bg-gray-50 transition-colors shadow-sm"
+            className="flex items-center gap-2 px-5 py-2.5 bg-white border border-slate-200 text-slate-700 text-sm font-semibold rounded-xl hover:bg-slate-50 transition-all shadow-sm"
           >
             <FileText className="w-4 h-4" />
             Exportar PDF
@@ -404,7 +598,7 @@ export default function DashboardPage() {
           <button 
             onClick={() => setShowExportModal(true)}
             disabled={exportingExcel || loading}
-            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 transition-colors shadow-sm disabled:opacity-50"
+            className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-sm font-semibold rounded-xl hover:from-emerald-500 hover:to-teal-500 transition-all shadow-lg shadow-emerald-500/20 disabled:opacity-50"
           >
             <Download className="w-4 h-4" />
             {exportingExcel ? 'Exportando...' : 'Exportar a Excel'}
@@ -412,81 +606,85 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      <main className="flex-1 p-6 overflow-hidden flex flex-col gap-6 max-w-[1920px] mx-auto w-full">
+      {/* Main content wrapper */}
+      <main className="flex-1 p-6 overflow-y-auto overflow-x-hidden flex flex-col gap-6 max-w-[1920px] mx-auto w-full relative z-10 custom-scrollbar">
         
         {/* TOP ROW: KPIs */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 flex items-center gap-5">
-            <div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
-              <BarChart2 className="w-6 h-6" />
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200/60 flex items-center gap-5 relative overflow-hidden group hover:shadow-md transition-shadow">
+            <div className="absolute inset-0 bg-gradient-to-r from-blue-50/0 via-blue-50/50 to-blue-50/0 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+            <div className="w-14 h-14 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center border border-blue-100 shadow-inner">
+              <BarChart2 className="w-7 h-7" />
             </div>
             <div>
-              <p className="text-sm font-medium text-gray-500">Procesos Analizados</p>
+              <p className="text-sm font-semibold text-slate-500">Procesos Analizados</p>
               <div className="flex items-end gap-3 mt-1">
-                <span className="text-3xl font-bold text-gray-900">{stats.procesosAnalizados.toLocaleString('es-CO')}</span>
-                <span className="text-xs font-medium text-gray-400 mb-1">Procesos en total</span>
+                <span className="text-4xl font-black text-slate-900 tracking-tight">{stats.procesosAnalizados.toLocaleString('es-CO')}</span>
+                <span className="text-xs font-medium text-slate-400 mb-1.5">Procesos en total</span>
               </div>
             </div>
-          </div>
+          </motion.div>
           
-          <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 flex items-center gap-5">
-            <div className="w-12 h-12 rounded-xl bg-red-50 text-red-600 flex items-center justify-center">
-              <AlertTriangle className="w-6 h-6" />
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200/60 flex items-center gap-5 relative overflow-hidden group hover:shadow-md transition-shadow">
+            <div className="absolute inset-0 bg-gradient-to-r from-red-50/0 via-red-50/50 to-red-50/0 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+            <div className="w-14 h-14 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center border border-red-100 shadow-inner">
+              <AlertTriangle className="w-7 h-7" />
             </div>
             <div>
-              <p className="text-sm font-medium text-gray-500">Alertas Encontradas</p>
+              <p className="text-sm font-semibold text-slate-500">Alertas Encontradas</p>
               <div className="flex items-end gap-3 mt-1">
-                <span className="text-3xl font-bold text-gray-900">{stats.alertasEncontradas}</span>
-                <span className="text-xs font-medium text-red-500 mb-1">Requieren revisión</span>
+                <span className="text-4xl font-black text-slate-900 tracking-tight">{stats.alertasEncontradas}</span>
+                <span className="text-xs font-bold text-red-600 mb-1.5 bg-red-50 px-2 py-0.5 rounded-full border border-red-100">Requieren revisión</span>
               </div>
             </div>
-          </div>
+          </motion.div>
 
-          <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 flex items-center gap-5">
-            <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
-              <CheckCircle className="w-6 h-6" />
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200/60 flex items-center gap-5 relative overflow-hidden group hover:shadow-md transition-shadow">
+             <div className="absolute inset-0 bg-gradient-to-r from-emerald-50/0 via-emerald-50/50 to-emerald-50/0 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+            <div className="w-14 h-14 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100 shadow-inner">
+              <CheckCircle className="w-7 h-7" />
             </div>
             <div>
-              <p className="text-sm font-medium text-gray-500">Tasa de Cumplimiento</p>
+              <p className="text-sm font-semibold text-slate-500">Tasa de Cumplimiento</p>
               <div className="flex items-end gap-3 mt-1">
-                <span className="text-3xl font-bold text-gray-900">{stats.tasaCumplimiento}%</span>
-                <span className="text-xs font-medium text-emerald-500 mb-1">Cálculo general</span>
+                <span className="text-4xl font-black text-slate-900 tracking-tight">{stats.tasaCumplimiento}%</span>
+                <span className="text-xs font-medium text-emerald-500 mb-1.5">Cálculo general</span>
               </div>
             </div>
-          </div>
+          </motion.div>
         </div>
 
         {/* SEARCH BAR */}
-        <div className="relative">
-          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-            <Search className="h-5 w-5 text-gray-400" />
+        <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} className="relative group">
+          <div className="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none">
+            <Search className="h-5 w-5 text-slate-400 group-focus-within:text-emerald-500 transition-colors" />
           </div>
           <input
             ref={searchInputRef}
             type="text"
-            className="block w-full pl-11 pr-16 py-3.5 border border-gray-200 rounded-xl leading-5 bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 sm:text-sm shadow-sm transition-all"
+            className="block w-full pl-14 pr-20 py-4 bg-white border border-slate-200/80 rounded-2xl leading-5 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 sm:text-sm shadow-sm transition-all"
             placeholder="Búsqueda global en todos los resultados (NIT, valores, palabras OCR)..."
             value={globalSearch}
             onChange={(e) => setGlobalSearch(e.target.value)}
           />
-          <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
-            <kbd className="inline-flex items-center px-2 py-1 border border-gray-200 rounded text-xs font-sans font-medium text-gray-400">Ctrl + K</kbd>
+          <div className="absolute inset-y-0 right-0 pr-5 flex items-center pointer-events-none">
+            <kbd className="inline-flex items-center px-2.5 py-1 bg-slate-50 border border-slate-200 rounded-md text-xs font-sans font-bold text-slate-400 shadow-sm">Ctrl + K</kbd>
           </div>
-        </div>
+        </motion.div>
 
         {/* PANELS ROW */}
         <div className="flex items-center justify-between mt-2">
-          <h2 className="text-sm font-bold text-gray-900">Configuración de Columnas para Exportación</h2>
-          <div className="flex items-center gap-2">
+          <h2 className="text-sm font-bold text-slate-700 tracking-wide uppercase">Configuración de Columnas para Exportación</h2>
+          <div className="flex items-center gap-3">
             <button 
               onClick={() => toggleAllColumns(true)} 
-              className="text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-lg transition-colors border border-emerald-200 shadow-sm"
+              className="text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-4 py-2 rounded-xl transition-all border border-emerald-200 shadow-sm"
             >
               Marcar Todas
             </button>
             <button 
               onClick={() => toggleAllColumns(false)} 
-              className="text-xs font-semibold text-gray-600 bg-white hover:bg-gray-50 px-3 py-1.5 rounded-lg transition-colors border border-gray-200 shadow-sm"
+              className="text-xs font-bold text-slate-600 bg-white hover:bg-slate-50 px-4 py-2 rounded-xl transition-all border border-slate-200 shadow-sm"
             >
               Desmarcar Todas
             </button>
@@ -495,11 +693,12 @@ export default function DashboardPage() {
         
         <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
           {/* Panel 1 */}
-          <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-            <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2 mb-4">
-              <FileSearch className="w-4 h-4 text-emerald-600" /> Información General
+          <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }} className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200/60 flex flex-col hover:shadow-md transition-shadow">
+            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-3 mb-5 pb-3 border-b border-slate-100">
+              <div className="p-1.5 bg-emerald-50 rounded-lg"><FileSearch className="w-4 h-4 text-emerald-600" /></div>
+              Información General
             </h3>
-            <div className="grid grid-cols-2 gap-y-3 gap-x-4">
+            <div className="grid grid-cols-2 gap-y-4 gap-x-4">
               {renderToggle('nombre_entidad', 'Nombre Entidad')}
               {renderToggle('nit_entidad', 'NIT Entidad')}
               {renderToggle('ciudad', 'Ciudad')}
@@ -507,20 +706,21 @@ export default function DashboardPage() {
               {renderToggle('nit_contratista', 'NIT/Cédula Contratista')}
               {renderToggle('valor_contrato', 'Valor Contrato')}
               {renderToggle('fecha_contrato', 'Fecha Contrato')}
-              {renderToggle('nombre_representante', 'Nombre Representante Legal')}
+              {renderToggle('nombre_representante', 'Nombre Representante')}
               {renderToggle('identificacion_representante', 'Cédula/NIT Representante')}
               {renderToggle('telefono_representante', 'Teléfono Representante')}
               {renderToggle('correo_representante', 'Correo Representante')}
               {renderToggle('tipo_contrato', 'Tipo de Contrato')}
             </div>
-          </div>
+          </motion.div>
 
           {/* Panel 2 */}
-          <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-            <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2 mb-4">
-              <Database className="w-4 h-4 text-emerald-600" /> Otras Columnas (Ocultas)
+          <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }} className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200/60 flex flex-col hover:shadow-md transition-shadow">
+            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-3 mb-5 pb-3 border-b border-slate-100">
+              <div className="p-1.5 bg-blue-50 rounded-lg"><Database className="w-4 h-4 text-blue-600" /></div>
+              Otras Columnas (Ocultas)
             </h3>
-            <div className="grid grid-cols-2 gap-y-3 gap-x-4">
+            <div className="grid grid-cols-2 gap-y-4 gap-x-4">
               {renderToggle('numero_proceso', 'Número Proceso')}
               {renderToggle('estado', 'Estado')}
               {renderToggle('objeto', 'Objeto')}
@@ -528,80 +728,85 @@ export default function DashboardPage() {
               {renderToggle('documentos', 'Documentos')}
               {renderToggle('pagos', 'Pagos')}
             </div>
-          </div>
+          </motion.div>
 
           {/* Panel 3 */}
-          <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 flex flex-col">
-            <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2 mb-4">
-              <Scale className="w-4 h-4 text-emerald-600" /> 
-              <span className="flex-1">Comparaciones Automáticas</span>
+          <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }} className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200/60 flex flex-col hover:shadow-md transition-shadow">
+            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-3 mb-5 pb-3 border-b border-slate-100">
+              <div className="p-1.5 bg-amber-50 rounded-lg"><Scale className="w-4 h-4 text-amber-500" /></div>
+              <span className="flex-1">Comparaciones</span>
               <button 
                 onClick={() => setShowSmartRuleModal(true)}
-                className="p-1.5 hover:bg-emerald-50 rounded-lg text-gray-400 hover:text-emerald-600 transition-colors border border-transparent hover:border-emerald-200"
+                className="p-1.5 hover:bg-slate-50 rounded-lg text-slate-400 hover:text-slate-700 transition-colors border border-transparent hover:border-slate-200"
                 title="Resolución Inteligente de Reglas (RAG)"
               >
                 <Settings className="w-4 h-4" />
               </button>
             </h3>
-            <div className="flex flex-col gap-2 mb-4">
+            <div className="flex flex-col gap-4 mb-4">
               {renderToggle('regla_firma_pub', 'Comparar Fecha Publicación vs Firma', 'regla_firma_pub_cumple, regla_firma_pub_diff')}
               {renderToggle('regla_firma_inicio', 'Comparar Fecha Firma vs Inicio', 'regla_firma_inicio_cumple, regla_firma_inicio_diff')}
               {renderToggle('regla_inicio_fin', 'Comparar Fecha Inicio vs Terminación', 'regla_inicio_fin_cumple, regla_inicio_fin_diff')}
             </div>
             
-            <div className="mt-auto">
-              <p className="text-[11px] font-semibold text-gray-500 mb-2 uppercase tracking-wider">Comparaciones personalizadas</p>
+            <div className="mt-auto pt-4 border-t border-slate-100">
+              <p className="text-[10px] font-bold text-slate-500 mb-3 uppercase tracking-wider">Reglas personalizadas</p>
               <div className="flex items-center gap-2 mb-3">
-                <select className="flex-1 text-xs border border-gray-200 rounded p-1.5 text-gray-700 bg-gray-50 outline-none focus:border-emerald-500">
+                <select className="flex-1 text-xs border border-slate-200 rounded-lg p-2 text-slate-700 bg-slate-50 outline-none focus:border-emerald-500">
                   <option>Fecha Firma</option>
                   <option>Fecha Inicio</option>
                 </select>
-                <span className="text-gray-400 text-xs font-bold">+</span>
-                <input type="number" defaultValue={3} className="w-12 text-center text-xs border border-gray-200 rounded p-1.5 text-gray-700 outline-none focus:border-emerald-500" />
-                <select className="w-16 text-xs border border-gray-200 rounded p-1.5 text-gray-700 bg-gray-50 outline-none focus:border-emerald-500">
+                <span className="text-slate-400 text-xs font-bold">+</span>
+                <input type="number" defaultValue={3} className="w-12 text-center text-xs border border-slate-200 rounded-lg p-2 text-slate-700 bg-slate-50 outline-none focus:border-emerald-500" />
+                <select className="w-16 text-xs border border-slate-200 rounded-lg p-2 text-slate-700 bg-slate-50 outline-none focus:border-emerald-500">
                   <option>Días</option>
                   <option>Meses</option>
                 </select>
-                <select className="flex-1 text-xs border border-gray-200 rounded p-1.5 text-gray-700 bg-gray-50 outline-none focus:border-emerald-500">
+                <select className="flex-1 text-xs border border-slate-200 rounded-lg p-2 text-slate-700 bg-slate-50 outline-none focus:border-emerald-500">
                   <option>Fecha Publicación</option>
                   <option>Fecha Terminación</option>
                 </select>
               </div>
-              <button className="w-full py-1.5 border border-emerald-200 text-emerald-700 text-xs font-semibold rounded hover:bg-emerald-50 transition-colors flex items-center justify-center gap-1">
-                + Agregar comparación
+              <button className="w-full py-2 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold rounded-lg hover:bg-emerald-100 transition-colors flex items-center justify-center gap-2">
+                + Agregar Regla
               </button>
             </div>
-          </div>
+          </motion.div>
 
           {/* Panel 4 */}
-          <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-            <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2 mb-4">
-              <FileSignature className="w-4 h-4 text-emerald-600" /> Hallazgos OCR
+          <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.4 }} className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200/60 flex flex-col hover:shadow-md transition-shadow">
+            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-3 mb-5 pb-3 border-b border-slate-100">
+              <div className="p-1.5 bg-indigo-50 rounded-lg"><FileSignature className="w-4 h-4 text-indigo-600" /></div>
+              Hallazgos OCR
             </h3>
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-4">
               {renderToggle('ocr_poliza', 'Pólizas de Cumplimiento')}
               {renderToggle('ocr_garantia', 'Garantías Bancarias')}
               {renderToggle('ocr_anticipo', 'Anticipos')}
             </div>
-          </div>
+          </motion.div>
         </div>
 
         {/* PANEL DE OCR AVANZADO */}
-        <div className="bg-white rounded-xl shadow-sm border border-emerald-100 overflow-hidden flex flex-col">
-          <div className="bg-gradient-to-r from-emerald-700 to-teal-800 px-6 py-4 flex items-center justify-between shadow-inner">
-             <h3 className="text-white font-bold flex items-center gap-3">
-               <div className="bg-white/20 p-1.5 rounded-lg"><FileSignature className="w-5 h-5 text-white" /></div>
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-slate-900 rounded-2xl shadow-xl border border-slate-800 overflow-hidden flex flex-col relative group mt-4">
+          <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-transparent pointer-events-none" />
+          <div className="bg-gradient-to-r from-emerald-900 to-slate-900 px-6 py-4 flex items-center justify-between shadow-inner border-b border-white/10">
+             <h3 className="text-white font-bold flex items-center gap-3 text-lg">
+               <div className="bg-black/30 p-2 rounded-xl backdrop-blur-md border border-white/10"><FileSignature className="w-5 h-5 text-emerald-400" /></div>
                Motor de Análisis Forense (OCR + IA)
              </h3>
-             <span className="text-emerald-100 text-xs bg-black/20 px-3 py-1.5 rounded-full font-medium border border-white/10">Búsqueda profunda en PDFs</span>
+             <span className="text-emerald-300 text-xs bg-emerald-950/50 px-3 py-1.5 rounded-lg font-bold border border-emerald-500/20 flex items-center gap-2 shadow-inner">
+               <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+               Búsqueda profunda en PDFs
+             </span>
           </div>
-          <div className="p-6 bg-emerald-50/30">
-             <p className="text-sm text-gray-600 mb-4">Ingresa el término que deseas buscar en los documentos físicos descargados (ej. "póliza de cumplimiento", "anticipo"). El sistema usará OCR para leer los PDFs e IA para identificar variaciones del término, devolviendo el contexto exacto donde fue hallado.</p>
+          <div className="p-6 relative z-10 bg-slate-900">
+             <p className="text-sm text-slate-400 mb-5 leading-relaxed max-w-4xl">Ingresa el término que deseas buscar en los documentos físicos descargados (ej. "póliza de cumplimiento", "anticipo"). El sistema usará OCR para leer los PDFs e IA para identificar variaciones del término, devolviendo el contexto exacto donde fue hallado.</p>
              <div className="flex gap-4">
                <input 
                  type="text"
                  placeholder="Término a buscar..."
-                 className="flex-1 border border-gray-300 rounded-xl px-5 py-3.5 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 shadow-sm text-sm"
+                 className="flex-1 bg-slate-950/50 backdrop-blur-sm border border-white/10 rounded-xl px-5 py-4 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 shadow-inner text-sm text-white placeholder-slate-500 transition-all"
                  value={ocrSearchTerm}
                  onChange={(e) => setOcrSearchTerm(e.target.value)}
                  onKeyDown={(e) => e.key === 'Enter' && runOcrScan()}
@@ -609,7 +814,7 @@ export default function DashboardPage() {
                <button 
                  onClick={runOcrScan}
                  disabled={isOcrRunning || !ocrSearchTerm}
-                 className="bg-emerald-600 text-white px-8 py-3.5 rounded-xl font-bold hover:bg-emerald-700 shadow-lg shadow-emerald-600/30 disabled:opacity-50 disabled:shadow-none flex items-center gap-2 transition-all active:scale-[0.98]"
+                 className="bg-emerald-600 text-white px-8 py-4 rounded-xl font-bold hover:bg-emerald-500 shadow-lg shadow-emerald-900/50 disabled:opacity-50 disabled:shadow-none flex items-center gap-3 transition-all active:scale-[0.98] border border-emerald-400/20"
                >
                  {isOcrRunning ? (
                    <svg className="animate-spin -ml-1 mr-2 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
@@ -618,161 +823,84 @@ export default function DashboardPage() {
                </button>
              </div>
              
-             {ocrResults.length > 0 && (
-                <div className="mt-8 border-t border-gray-200 pt-6">
-                   <h4 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
-                     <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                     Resultados Encontrados ({ocrResults.length})
-                   </h4>
-                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[500px] overflow-y-auto pr-2 pb-2">
-                     {ocrResults.map((r, i) => (
-                        <div key={i} className="bg-white border border-gray-200 p-5 rounded-xl shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
-                           <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500"></div>
-                           <div className="flex justify-between items-start mb-3">
-                             <div>
-                               <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded uppercase tracking-wider">Contrato: {r.llave}</span>
-                               <p className="text-xs text-gray-500 mt-1 truncate max-w-[200px]" title={r.archivo}>📄 {r.archivo}</p>
+             <AnimatePresence>
+               {ocrResults.length > 0 && (
+                  <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="mt-8 border-t border-white/10 pt-6">
+                     <h4 className="font-bold text-white mb-5 flex items-center gap-3">
+                       <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.8)]"></span>
+                       Resultados Encontrados ({ocrResults.length})
+                     </h4>
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5 max-h-[500px] overflow-y-auto pr-2 pb-2 custom-scrollbar">
+                       {ocrResults.map((r, i) => (
+                          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: i * 0.05 }} key={i} className="bg-slate-950/50 backdrop-blur-sm border border-white/5 p-6 rounded-2xl shadow-lg hover:shadow-emerald-900/20 transition-all relative overflow-hidden group hover:border-emerald-500/30">
+                             <div className="absolute top-0 left-0 w-1.5 h-full bg-gradient-to-b from-emerald-400 to-teal-600"></div>
+                             <div className="flex justify-between items-start mb-4">
+                               <div>
+                                 <span className="text-[10px] font-bold text-emerald-300 bg-emerald-950/80 border border-emerald-500/20 px-2.5 py-1 rounded-md uppercase tracking-widest shadow-inner">Contrato: {r.llave}</span>
+                                 <p className="text-xs text-slate-400 mt-2 truncate max-w-[250px] flex items-center gap-1.5" title={r.archivo}><FileText className="w-3.5 h-3.5 text-slate-500" /> {r.archivo}</p>
+                               </div>
                              </div>
-                           </div>
-                           <div className="bg-gray-50 p-3 rounded-lg border border-gray-100 relative">
-                             <span className="absolute -top-2 -left-2 text-2xl text-gray-300">"</span>
-                             <p className="text-sm text-gray-700 italic relative z-10 leading-relaxed font-serif">
-                               {r.match}
-                             </p>
-                           </div>
-                        </div>
-                     ))}
-                   </div>
-                </div>
-             )}
+                             <div className="bg-slate-900/80 p-4 rounded-xl border border-white/5 relative shadow-inner">
+                               <span className="absolute -top-3 -left-2 text-4xl text-slate-700 font-serif opacity-50">"</span>
+                               <p className="text-sm text-slate-300 italic relative z-10 leading-relaxed font-serif">
+                                 {r.match}
+                               </p>
+                             </div>
+                          </motion.div>
+                       ))}
+                     </div>
+                  </motion.div>
+               )}
+             </AnimatePresence>
           </div>
-        </div>
+        </motion.div>
 
-        {/* DATA TABLE */}
-        <div className={`bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col transition-all duration-300 ${isTableExpanded ? 'fixed inset-4 z-[9999] shadow-2xl flex-1 h-auto' : 'flex-1 min-h-[400px]'}`}>
-          <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50">
-            <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
-              2. Vista previa del reporte
-            </h3>
-            <div className="flex items-center gap-4">
-              <button onClick={() => setIsTableExpanded(!isTableExpanded)} className="text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-lg hover:bg-emerald-100 flex items-center gap-1.5 transition-all shadow-sm">
-                {isTableExpanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />} 
-                {isTableExpanded ? 'Minimizar vista' : 'Ampliar tabla'}
-              </button>
-              <div className="w-px h-4 bg-gray-300"></div>
-              <button onClick={() => setShowColumnConfigModal(true)} className="text-xs font-medium text-gray-600 hover:text-emerald-600 flex items-center gap-1.5 transition-colors">
-                <Settings className="w-3.5 h-3.5" /> Configurar columnas
-              </button>
-              <button onClick={() => setColumnFilters({})} className="text-xs font-medium text-gray-600 hover:text-red-600 flex items-center gap-1.5 transition-colors">
-                <SlidersHorizontal className="w-3.5 h-3.5" /> Limpiar filtros
-              </button>
-              <span className="text-xs text-gray-400 font-medium bg-white px-2 py-1 rounded border border-gray-200">{filteredData.length} registros</span>
-            </div>
-          </div>
-          
-          <div className="flex-1 overflow-x-auto overflow-y-auto">
-            <table className="w-full text-left text-xs whitespace-nowrap min-w-[1200px]">
-              <thead className="bg-white border-b border-gray-200 text-gray-900 font-bold sticky top-0 shadow-sm z-10">
-                <tr>
-                  {columnOrder.map(colKey => {
-                    if (!selectedColumns[colKey as keyof typeof selectedColumns]) return null;
-                    const config = COLUMNS_CONFIG_TABLE[colKey as string] || { title: colKey, filterKey: colKey, minWidth: "120px", render: (r: any) => "N/A" };
-                    return (
-                      <th key={colKey} className="px-4 py-3 align-top" style={{ minWidth: config.minWidth }}>
-                        <div>{config.title}</div>
-                        {config.filterKey && (
-                          <input type="text" placeholder="Filtrar..." className="mt-1.5 w-full text-[10px] p-1.5 border border-gray-200 rounded font-normal shadow-inner bg-gray-50 focus:bg-white focus:outline-none focus:border-emerald-500 transition-colors" value={columnFilters[config.filterKey] || ''} onChange={(e) => setColumnFilters({...columnFilters, [config.filterKey!]: e.target.value})} />
-                        )}
-                      </th>
-                    );
-                  })}
-                  <th className="px-4 py-3 text-center align-top min-w-[80px]"><div>Acciones</div></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100 text-gray-700">
-                {loading ? (
-                  <tr>
-                    <td colSpan={columnOrder.length + 1} className="px-4 py-12 text-center text-gray-400 animate-pulse">Cargando datos...</td>
-                  </tr>
-                ) : filteredData.length === 0 ? (
-                  <tr>
-                    <td colSpan={columnOrder.length + 1} className="px-4 py-12 text-center text-gray-500">No hay registros que coincidan con los filtros.</td>
-                  </tr>
-                ) : (
-                  filteredData.map((row, idx) => (
-                    <tr key={row.internal_id || idx} className="hover:bg-emerald-50/50 transition-colors">
-                      {columnOrder.map(colKey => {
-                        if (!selectedColumns[colKey as keyof typeof selectedColumns]) return null;
-                        const config = COLUMNS_CONFIG_TABLE[colKey as string];
-                        if (!config) return <td key={colKey} className="px-4 py-3">N/A</td>;
-                        
-                        return (
-                          <td key={colKey} className="px-4 py-3">
-                            {config.render(row, { setSelectedNit })}
-                          </td>
-                        );
-                      })}
-                      
-                      <td className="px-4 py-3 text-center flex items-center justify-center gap-2">
-                          <button 
-                            onClick={() => setSelectedContrato(row)}
-                            className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-colors"
-                            title="Ver detalle"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
-                          <button 
-                            onClick={() => handleDownloadZip(row.internal_id)}
-                            className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-colors"
-                            title="Descargar ZIP local"
-                          >
-                            <DownloadCloud className="w-4 h-4" />
-                          </button>
-                        </td>
-                      </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-          
-          <div className="px-5 py-3 border-t border-gray-100 bg-white flex items-center justify-between">
-            <span className="text-xs text-gray-500">Mostrando {filteredData.length} registros</span>
-            {/* Minimal Pagination placeholder */}
-            <div className="flex gap-1">
-              <button className="px-2 py-1 border border-gray-200 rounded text-xs text-gray-400 bg-gray-50 hover:bg-gray-100">&lt;</button>
-              <button className="px-2.5 py-1 border border-emerald-500 rounded text-xs text-emerald-700 bg-emerald-50 font-medium">1</button>
-              <button className="px-2 py-1 border border-gray-200 rounded text-xs text-gray-400 bg-gray-50 hover:bg-gray-100">&gt;</button>
-            </div>
-          </div>
-        </div>
+        {/* DATA TABLE (Standard View) */}
+        {!isTableExpanded && renderTableContent(false)}
 
       </main>
 
+      {/* FULLSCREEN TABLE MODAL */}
+      <AnimatePresence>
+        {isTableExpanded && (
+          <motion.div 
+            initial={{ opacity: 0, y: 50, scale: 0.98 }} 
+            animate={{ opacity: 1, y: 0, scale: 1 }} 
+            exit={{ opacity: 0, y: 20, scale: 0.98 }}
+            transition={{ duration: 0.4, type: "spring", bounce: 0 }}
+            className="fixed inset-4 z-[99999] bg-white rounded-3xl shadow-[0_0_100px_rgba(0,0,0,0.2)] border border-slate-200 flex flex-col overflow-hidden"
+          >
+            {renderTableContent(true)}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+
       {/* MODALS */}
       {/* MODAL DE EXPORTACIÓN EXCEL */}
+      <AnimatePresence>
       {showExportModal && (
-        <div className="fixed inset-0 z-[99999] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden border border-gray-100 flex flex-col">
-            <div className="p-6 border-b border-gray-100 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-600">
-                <Database className="w-5 h-5" />
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[99999] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden border border-slate-200 flex flex-col">
+            <div className="p-6 border-b border-slate-100 flex items-center gap-4 bg-slate-50">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-inner text-white">
+                <Database className="w-6 h-6" />
               </div>
               <div>
-                <h2 className="text-lg font-bold text-gray-900">Exportación a Excel</h2>
-                <p className="text-sm text-gray-500">Configuración de libro maestro</p>
+                <h2 className="text-xl font-bold text-slate-900 tracking-tight">Exportación a Excel</h2>
+                <p className="text-sm text-slate-500 mt-0.5">Configuración de libro maestro</p>
               </div>
             </div>
-            <div className="p-6 flex flex-col gap-4 bg-gray-50/50">
-              <p className="text-sm text-gray-600 leading-relaxed text-center font-medium">
+            <div className="p-6 flex flex-col gap-5 bg-white">
+              <p className="text-sm text-slate-600 leading-relaxed text-center font-medium">
                 ¿Desea anexar la información detallada de los terceros y su histórico de contratos?
               </p>
               <div className="flex flex-col gap-3 mt-2">
                 <button 
                   onClick={() => executeExcelExport(true)}
-                  className="w-full text-left p-4 rounded-xl border-2 border-emerald-500 bg-emerald-50/30 hover:bg-emerald-50 transition-colors flex gap-3 items-center group"
+                  className="w-full text-left p-5 rounded-2xl border-2 border-emerald-500 bg-emerald-50 hover:bg-emerald-100 transition-all flex gap-4 items-center group shadow-sm hover:shadow-md"
                 >
-                  <div className="bg-emerald-100 p-2 rounded-full"><CheckCircle className="w-5 h-5 text-emerald-600" /></div>
+                  <div className="bg-emerald-100 p-2.5 rounded-xl border border-emerald-200 group-hover:scale-110 transition-transform"><CheckCircle className="w-6 h-6 text-emerald-600" /></div>
                   <div>
                     <h3 className="font-bold text-emerald-900 text-sm">Sí, anexar información de terceros</h3>
                     <p className="text-xs text-emerald-700/80 mt-1">Genera pestañas independientes para cada contratista.</p>
@@ -781,27 +909,28 @@ export default function DashboardPage() {
 
                 <button 
                   onClick={() => executeExcelExport(false)}
-                  className="w-full text-left p-4 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 transition-colors flex gap-3 items-center"
+                  className="w-full text-left p-5 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 transition-all flex gap-4 items-center group"
                 >
-                  <div className="bg-gray-100 p-2 rounded-full"><FileText className="w-5 h-5 text-gray-500" /></div>
+                  <div className="bg-slate-100 p-2.5 rounded-xl border border-slate-200 group-hover:scale-110 transition-transform"><FileText className="w-6 h-6 text-slate-500" /></div>
                   <div>
-                    <h3 className="font-bold text-gray-700 text-sm">No, solo exportar tabla actual</h3>
-                    <p className="text-xs text-gray-500 mt-1">Exporta únicamente la información visible en la pantalla.</p>
+                    <h3 className="font-bold text-slate-700 text-sm">No, solo exportar tabla actual</h3>
+                    <p className="text-xs text-slate-500 mt-1">Exporta únicamente la información visible en la pantalla.</p>
                   </div>
                 </button>
               </div>
             </div>
-            <div className="p-4 border-t border-gray-100 bg-white flex justify-end">
+            <div className="p-5 border-t border-slate-100 bg-slate-50 flex justify-end">
               <button 
                 onClick={() => setShowExportModal(false)}
-                className="px-5 py-2 text-sm font-semibold text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                className="px-6 py-2.5 text-sm font-bold text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-100 rounded-xl transition-colors border border-slate-200 shadow-sm"
               >
                 Cancelar
               </button>
             </div>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       )}
+      </AnimatePresence>
 
       {/* Modal Reporte Contratista */}
       {selectedNit && (
@@ -828,98 +957,109 @@ export default function DashboardPage() {
           jobId={jobId}
           resultsData={resultsData}
           onRefresh={() => {
-            // Recargar datos si es necesario
             window.location.reload();
           }}
         />
       )}
 
+      <AnimatePresence>
       {selectedContrato && (
-        <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center p-8 z-50">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col max-h-[90vh] overflow-hidden border border-gray-200">
-            <div className="flex items-center justify-between p-6 border-b border-gray-100">
-              <div>
-                <h3 className="text-lg font-bold text-gray-900">Visor de Datos y OCR</h3>
-                <p className="text-sm text-gray-500 mt-1">Llave: <span className="font-mono text-emerald-700">{selectedContrato.llave_busqueda}</span></p>
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-6 z-[999999]">
+          <motion.div initial={{ scale: 0.95, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0, y: 20 }} className="bg-white rounded-3xl shadow-2xl w-full max-w-5xl flex flex-col max-h-[90vh] overflow-hidden border border-slate-200">
+            <div className="flex items-center justify-between p-6 border-b border-slate-100 bg-slate-50">
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-100"><Database className="w-6 h-6 text-emerald-600" /></div>
+                <div>
+                  <h3 className="text-xl font-bold text-slate-900 tracking-tight">Visor de Datos y JSON Raw</h3>
+                  <p className="text-sm text-slate-500 mt-1">Llave Identificadora: <span className="font-mono text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded border border-emerald-200">{selectedContrato.llave_busqueda}</span></p>
+                </div>
               </div>
               <button 
                 onClick={() => setSelectedContrato(null)}
-                className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                className="p-2.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200 rounded-xl transition-all"
               >
-                ✕
+                <X className="w-6 h-6" />
               </button>
             </div>
             
-            <div className="p-6 overflow-y-auto bg-gray-50 flex-1">
-              <h4 className="text-sm font-bold text-gray-700 mb-2">JSON Raw (SECOP + Reglas Pandas)</h4>
-              <div className="bg-gray-900 rounded-xl p-4 shadow-inner overflow-x-auto">
-                <pre className="text-emerald-400 font-mono text-sm">
+            <div className="p-6 overflow-y-auto bg-slate-50 flex-1 custom-scrollbar">
+              <h4 className="text-sm font-bold text-slate-700 mb-3 uppercase tracking-wider flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-emerald-500"></span> Objeto Raw (SECOP + Reglas Pandas)</h4>
+              <div className="bg-slate-900 rounded-2xl p-5 shadow-inner border border-slate-800 overflow-x-auto relative">
+                <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500"></div>
+                <pre className="text-emerald-400/90 font-mono text-sm leading-relaxed">
                   {JSON.stringify(selectedContrato, null, 2)}
                 </pre>
               </div>
             </div>
             
-            <div className="p-4 border-t border-gray-100 bg-white flex justify-end">
+            <div className="p-5 border-t border-slate-100 bg-white flex justify-end">
               <button 
                 onClick={() => setSelectedContrato(null)}
-                className="px-5 py-2 bg-gray-900 hover:bg-gray-800 text-white text-sm font-medium rounded-lg transition-colors"
+                className="px-8 py-3 bg-slate-900 hover:bg-slate-800 text-white text-sm font-bold rounded-xl transition-all shadow-sm border border-slate-700"
               >
                 Cerrar Visor
               </button>
             </div>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       )}
+      </AnimatePresence>
 
       {/* Modal de Reintento */}
+      <AnimatePresence>
       {showRetryModal && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-md p-4">
-          <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-lg w-full text-center border border-white/20 animate-in zoom-in duration-300">
-            <div className="w-16 h-16 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-4">
-              <RefreshCw className="w-8 h-8" />
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[999999] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+          <motion.div initial={{ scale: 0.95, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0, y: 20 }} className="bg-white rounded-[2rem] shadow-2xl p-8 max-w-lg w-full text-center border border-slate-200 relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-b from-indigo-50 to-transparent pointer-events-none" />
+            <div className="relative z-10">
+              <div className="w-20 h-20 bg-indigo-100 text-indigo-600 border border-indigo-200 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-inner transform rotate-3">
+                <RefreshCw className="w-10 h-10" />
+              </div>
+              <h3 className="text-3xl font-black text-slate-900 mb-3 tracking-tight">Reintentar Análisis</h3>
+              <p className="mb-8 text-slate-500 text-sm leading-relaxed">
+                Selecciona cómo deseas volver a procesar las llaves guardadas para este análisis forense.
+              </p>
+              <div className="flex flex-col gap-3 justify-center mb-6 text-sm">
+                <button 
+                  onClick={() => executeRetry(false, 'copy')}
+                  className="w-full px-5 py-4 bg-indigo-50 border border-indigo-200 text-indigo-700 rounded-2xl font-bold hover:bg-indigo-100 transition-all active:scale-[0.98]"
+                >
+                  Cargar Datos (Caché) y Copiar PDFs
+                </button>
+                <button 
+                  onClick={() => executeRetry(false, 'scrape')}
+                  className="w-full px-5 py-4 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-2xl font-bold hover:bg-emerald-100 transition-all active:scale-[0.98]"
+                >
+                  Cargar Datos (Caché) y Re-descargar PDFs
+                </button>
+                <button 
+                  onClick={() => executeRetry(false, 'ignore')}
+                  className="w-full px-5 py-4 bg-slate-100 border border-slate-200 text-slate-700 rounded-2xl font-bold hover:bg-slate-200 transition-all active:scale-[0.98]"
+                >
+                  Solo Datos (Ignorar PDFs)
+                </button>
+                <div className="h-px bg-slate-200 my-2 w-1/2 mx-auto" />
+                <button 
+                  onClick={() => executeRetry(true, 'ignore')}
+                  className="w-full px-5 py-4 bg-amber-50 border border-amber-200 text-amber-600 rounded-2xl font-bold hover:bg-amber-100 transition-all active:scale-[0.98]"
+                >
+                  Sobrescribir Datos SECOP (Sin PDFs)
+                </button>
+                <button 
+                  onClick={() => executeRetry(true, 'scrape')}
+                  className="w-full px-5 py-4 bg-red-50 border border-red-200 text-red-600 rounded-2xl font-bold hover:bg-red-100 transition-all active:scale-[0.98]"
+                >
+                  Sobrescribir TODO desde SECOP (Lento)
+                </button>
+              </div>
+              <button onClick={() => setShowRetryModal(false)} className="text-sm font-bold text-slate-500 hover:text-slate-900 transition-colors">
+                Cancelar operación
+              </button>
             </div>
-            <h3 className="text-2xl font-bold text-gray-900 mb-2">Reintentar Análisis</h3>
-            <p className="mb-6 text-gray-600 text-sm leading-relaxed">
-              Selecciona cómo deseas volver a procesar las llaves guardadas para este análisis.
-            </p>
-            <div className="flex flex-col gap-3 justify-center mb-4 text-sm">
-              <button 
-                onClick={() => executeRetry(false, 'copy')}
-                className="w-full px-4 py-3 bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 shadow-lg shadow-indigo-600/30 transition-all active:scale-[0.98]"
-              >
-                Cargar Datos (Caché) y Copiar PDFs
-              </button>
-              <button 
-                onClick={() => executeRetry(false, 'scrape')}
-                className="w-full px-4 py-3 bg-emerald-600 text-white rounded-xl font-semibold hover:bg-emerald-700 shadow-lg shadow-emerald-600/30 transition-all active:scale-[0.98]"
-              >
-                Cargar Datos (Caché) y Re-descargar PDFs
-              </button>
-              <button 
-                onClick={() => executeRetry(false, 'ignore')}
-                className="w-full px-4 py-3 bg-slate-600 text-white rounded-xl font-semibold hover:bg-slate-700 shadow-lg shadow-slate-600/30 transition-all active:scale-[0.98]"
-              >
-                Solo Datos (Ignorar PDFs)
-              </button>
-              <button 
-                onClick={() => executeRetry(true, 'ignore')}
-                className="w-full px-4 py-3 bg-white border-2 border-amber-500 text-amber-600 rounded-xl font-semibold hover:bg-amber-50 transition-all active:scale-[0.98]"
-              >
-                Sobrescribir Datos SECOP (Ignorar PDFs)
-              </button>
-              <button 
-                onClick={() => executeRetry(true, 'scrape')}
-                className="w-full px-4 py-3 bg-white border-2 border-red-500 text-red-600 rounded-xl font-semibold hover:bg-red-50 transition-all active:scale-[0.98]"
-              >
-                Sobrescribir TODO desde SECOP (Lento)
-              </button>
-            </div>
-            <button onClick={() => setShowRetryModal(false)} className="text-sm text-gray-400 hover:text-gray-600 underline mt-2">
-              Cancelar
-            </button>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       )}
+      </AnimatePresence>
 
       {/* El famoso Log Elegante (HackerOverlay) central y su estado Minimizado */}
       {scraperActive && (

@@ -63,16 +63,16 @@ def generate_ai_report(nombre_contratista: str, nit: str, resumen: dict, db: Ses
     return reporte_ia
 
 @router.get("/{nit}")
-async def get_contractor_report(nit: str, db: Session = Depends(get_db)):
+async def get_contractor_report(nit: str, force_refresh: bool = False, db: Session = Depends(get_db)):
     # 1. Fetch from Cache or Socrata using the shared service
-    registro = await fetch_and_summarize_contractor(nit, db, force_secop=False)
+    registro = await fetch_and_summarize_contractor(nit, db, force_secop=force_refresh)
     
     if not registro:
         raise HTTPException(status_code=404, detail="El contratista no tiene contratos registrados o el NIT es incorrecto.")
 
     # 2. Lazy AI Loading: Si está en caché pero no tiene reporte IA válido
     is_cached_ai = True
-    if not registro.reporte_ia or "no está configurada" in registro.reporte_ia or "**Error" in registro.reporte_ia:
+    if force_refresh or not registro.reporte_ia or "no está configurada" in registro.reporte_ia or "**Error" in registro.reporte_ia:
         print(f"Generando IA bajo demanda (Lazy Loading) para NIT {nit}")
         registro.reporte_ia = generate_ai_report(registro.nombre, nit, registro.resumen_calculado, db)
         db.commit()

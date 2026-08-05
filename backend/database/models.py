@@ -27,7 +27,9 @@ class AnalisisRealizado(Base):
     columna_escogida = Column(String)
     estado = Column(Enum(EstadoAnalisis), default=EstadoAnalisis.INICIADO)
     hora_inicio = Column(DateTime, default=datetime.utcnow)
-    tiempo_respuesta = Column(Float)  # En segundos
+    tiempo_respuesta = Column(Float)
+    parametros_busqueda = Column(String)
+    progreso_descarga = Column(Integer, default=0)  # En segundos
 
 class CacheSecop(Base):
     """Bóveda Global de datos de SECOP tabulada. La llave primaria es el identificador único."""
@@ -214,3 +216,84 @@ class ClavesDesarrollo(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     clave_encriptada = Column(String, nullable=False)
     fecha_creacion = Column(DateTime, default=datetime.utcnow)
+
+class SecopIBruto(Base):
+    """Tabla oficial para contratos SECOP I, mapeando la estructura solicitada por el usuario"""
+    __tablename__ = "secop_i_bruto"
+    
+    # BLOQUE 1: IDENTIFICADORES Y LLAVES (PK)
+    uid = Column(String(100), primary_key=True)
+    anno_cargue = Column(String(4))
+    numero_constancia = Column(String(100))
+    numero_proceso = Column(String(150))
+    numero_contrato = Column(String(150))
+    
+    # BLOQUE 2: DATOS DE LA ENTIDAD CONTRATANTE
+    nivel_entidad = Column(String(50))
+    orden_entidad = Column(String(100))
+    nombre_entidad = Column(String(255))
+    nit_entidad = Column(String(20), index=True)
+    codigo_entidad = Column(String(50))
+    departamento_entidad = Column(String(100))
+    municipio_entidad = Column(String(100))
+    
+    # BLOQUE 3: CLASIFICACIÓN Y ESTADO DEL PROCESO
+    estado_proceso = Column(String(100), index=True)
+    tipo_proceso = Column(String(150))
+    regimen_contratacion = Column(String(150))
+    objeto_contratar = Column(String(150))
+    detalle_objeto = Column(String)
+    tipo_contrato = Column(String(150))
+    causal_otras_compras = Column(String(255))
+    
+    # BLOQUE 4: CLASIFICACIÓN UNSPSC (Códigos ONU)
+    id_grupo = Column(String(50))
+    nombre_grupo = Column(String(150))
+    id_familia = Column(String(50))
+    nombre_familia = Column(String(150))
+    id_clase = Column(String(50))
+    nombre_clase = Column(String(150))
+    
+    # BLOQUE 5: DATOS DEL CONTRATISTA (PROVEEDOR)
+    tipo_identificacion = Column(String(50))
+    identificacion = Column(String(50), index=True)
+    nombre_contratista = Column(String(255))
+    dpto_mpio_contratista = Column(String(150))
+    tipo_doc_representante = Column(String(50))
+    identificacion_representante = Column(String(50))
+    nombre_representante = Column(String(255))
+    
+    # BLOQUE 6: INFORMACIÓN FINANCIERA (CONTABLE)
+    cuantia_proceso = Column(Float) # SQLite uses Float for Decimal
+    cuantia_contrato = Column(Float)
+    valor_total_adiciones = Column(Float, default=0.00)
+    cuantia_definitiva = Column(Float)
+    compromiso_presupuestal = Column(String(150))
+    destinacion_gasto = Column(String(150))
+    origen_recursos = Column(String(150))
+    
+    # BLOQUE 7: CRONOGRAMA, FECHAS Y PLAZOS
+    fecha_cargue = Column(String) # For SQlite/FastAPI parsing simplicity, strings or DateTime. Using String to avoid null parsing issues.
+    anno_firma = Column(String(4))
+    fecha_firma = Column(String)
+    fecha_ini_ejec_contrato = Column(String)
+    plazo_ejecucion = Column(Integer)
+    rango_ejecucion = Column(String(50))
+    tiempo_adiciones = Column(Integer, default=0)
+    rango_adiciones = Column(String(50))
+    fecha_plazo = Column(String)
+    fecha_liquidacion = Column(String)
+    
+    # BLOQUE 8: EJECUCIÓN FÍSICA Y UBICACIÓN
+    departamento_ejecucion = Column(String(100))
+    municipio_ejecucion = Column(String(100))
+    
+    # BLOQUE 9: OBLIGACIONES ESPECIALES
+    obligacion_ambiental = Column(String(10))
+    obligaciones_postconsumo = Column(String(10))
+    reversion = Column(String(10))
+    
+    # BLOQUE 10: TRAZABILIDAD Y SISTEMA
+    ruta_web = Column(String)
+    origen_datos = Column(String(20), default="SECOP_I")
+    fecha_extraccion = Column(DateTime, default=datetime.utcnow)

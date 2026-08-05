@@ -2,10 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
   FileText, Search, Clock, Calendar, 
   Play, CheckCircle, AlertTriangle, 
-  Loader2, Key, ChevronRight, FileArchive, Copy
+  Loader2, Key, ChevronRight, FileArchive, Copy,
+  Database, Server
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -19,6 +21,21 @@ interface HistoryRecord {
   cantidad_llaves: number;
 }
 
+const containerVariants = {
+  hidden: { opacity: 0 },
+  show: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.1
+    }
+  }
+};
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 20 },
+  show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 300, damping: 24 } }
+};
+
 export default function HistoryPage() {
   const router = useRouter();
   const [history, setHistory] = useState<HistoryRecord[]>([]);
@@ -31,7 +48,7 @@ export default function HistoryPage() {
   const [jobToDuplicate, setJobToDuplicate] = useState<string | null>(null);
   const [newJobName, setNewJobName] = useState("");
   const [duplicating, setDuplicating] = useState(false);
-  const LIMIT = 10;
+  const LIMIT = 12;
 
   useEffect(() => {
     fetchHistory(0);
@@ -42,7 +59,7 @@ export default function HistoryPage() {
     else setLoadingMore(true);
 
     try {
-      const res = await fetch(`http://localhost:8000/api/dashboard/history?limit=${LIMIT}&offset=${currentOffset}`);
+      const res = await fetch(`http://127.0.0.1:8000/api/dashboard/history?limit=${LIMIT}&offset=${currentOffset}`);
       if (res.ok) {
         const result = await res.json();
         if (currentOffset === 0) {
@@ -68,7 +85,7 @@ export default function HistoryPage() {
 
   const handleOpenFolder = async (jobId: string) => {
     try {
-      await fetch('http://localhost:8000/api/dashboard/open-folder', {
+      await fetch('http://127.0.0.1:8000/api/dashboard/open-folder', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ jobId })
@@ -83,10 +100,10 @@ export default function HistoryPage() {
     if (!jobToDuplicate || !newJobName.trim()) return;
     
     setDuplicating(true);
-    const toastId = toast.loading('Duplicando análisis...');
+    const toastId = toast.loading('Duplicando análisis e independizando Bóveda...');
     
     try {
-      const res = await fetch('http://localhost:8000/api/dashboard/duplicate', {
+      const res = await fetch('http://127.0.0.1:8000/api/dashboard/duplicate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ jobId: jobToDuplicate, newName: newJobName.trim() })
@@ -95,7 +112,7 @@ export default function HistoryPage() {
       const data = await res.json();
       
       if (res.ok) {
-        toast.success('Análisis duplicado exitosamente', { id: toastId });
+        toast.success('Bóveda duplicada exitosamente', { id: toastId });
         setDuplicateModalOpen(false);
         setNewJobName('');
         setJobToDuplicate(null);
@@ -120,13 +137,38 @@ export default function HistoryPage() {
   const getStatusBadge = (estado: string) => {
     switch (estado) {
       case 'Completado':
-        return <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700 border border-emerald-200"><CheckCircle className="w-3.5 h-3.5" /> Completado</span>;
+        return (
+          <div className="relative group/badge flex items-center justify-center">
+            <div className="absolute inset-0 bg-emerald-400/20 rounded-full blur-md group-hover/badge:blur-lg transition-all" />
+            <span className="relative flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-white/80 backdrop-blur border border-emerald-200 text-emerald-700 shadow-sm">
+              <CheckCircle className="w-3.5 h-3.5" /> Completado
+            </span>
+          </div>
+        );
       case 'Procesando':
-        return <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-700 border border-blue-200"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Procesando</span>;
+        return (
+          <div className="relative group/badge flex items-center justify-center">
+            <div className="absolute inset-0 bg-blue-400/20 rounded-full blur-md group-hover/badge:blur-lg transition-all animate-pulse" />
+            <span className="relative flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-white/80 backdrop-blur border border-blue-200 text-blue-700 shadow-sm">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" /> Procesando
+            </span>
+          </div>
+        );
       case 'Error':
-        return <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700 border border-red-200"><AlertTriangle className="w-3.5 h-3.5" /> Error</span>;
+        return (
+          <div className="relative group/badge flex items-center justify-center">
+            <div className="absolute inset-0 bg-red-400/20 rounded-full blur-md group-hover/badge:blur-lg transition-all" />
+            <span className="relative flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-white/80 backdrop-blur border border-red-200 text-red-700 shadow-sm">
+              <AlertTriangle className="w-3.5 h-3.5" /> Error
+            </span>
+          </div>
+        );
       default:
-        return <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-200">{estado}</span>;
+        return (
+          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-slate-100/80 backdrop-blur border border-slate-200 text-slate-700 shadow-sm">
+            {estado}
+          </span>
+        );
     }
   };
 
@@ -139,65 +181,106 @@ export default function HistoryPage() {
   };
 
   return (
-    <div className="w-full h-full flex flex-col bg-slate-50 min-h-screen">
-      <div className="bg-white border-b border-gray-200 px-8 py-8 shadow-sm">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-              <FileText className="w-8 h-8 text-emerald-600" />
-              Historial de Consultas
-            </h1>
-            <p className="mt-2 text-gray-500 max-w-2xl">
-              Aquí encontrarás todas las auditorías y análisis masivos que has realizado. 
-              El sistema guarda automáticamente toda la información en la base de datos local.
-            </p>
-          </div>
-          
-          <div className="relative w-full md:w-96">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-            <input 
-              type="text" 
-              placeholder="Buscar por nombre o archivo origen..." 
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-sm font-medium"
-            />
+    <div className="relative w-full h-full min-h-[95vh] flex flex-col bg-[#f8fafc] overflow-x-hidden rounded-3xl m-2 shadow-[inset_0_0_100px_rgba(0,0,0,0.02)] border border-white">
+      
+      {/* Background Decorativo Premium */}
+      <div className="absolute inset-0 bg-[url('/noise.png')] opacity-[0.03] mix-blend-overlay pointer-events-none fixed" />
+      <div className="fixed top-[-20%] left-[-10%] w-[50%] h-[50%] bg-emerald-400/20 blur-[140px] rounded-full mix-blend-multiply pointer-events-none animate-pulse-slow" />
+      <div className="fixed bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-blue-400/20 blur-[140px] rounded-full mix-blend-multiply pointer-events-none animate-pulse-slow" />
+
+      {/* Header Estilo UploadZone (Flotante y Espaciado) */}
+      <header className="relative w-full pt-12 pb-8 px-6 lg:px-10 flex flex-col xl:flex-row items-center justify-between z-20 gap-8">
+        <div className="flex items-center gap-4">
+          <motion.div 
+            initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: "spring" }}
+            className="w-16 h-16 bg-gradient-to-br from-emerald-100 to-emerald-50 text-emerald-600 rounded-3xl flex items-center justify-center shadow-md border border-emerald-100 shrink-0"
+          >
+            <Database className="w-8 h-8" />
+          </motion.div>
+          <div className="flex flex-col items-start">
+            <motion.h1 
+              initial={{ opacity: 0, x: -30 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.6, ease: "easeOut" }}
+              className="text-4xl md:text-5xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 drop-shadow-sm flex items-center"
+            >
+              Bóveda Forense
+            </motion.h1>
+            <motion.p 
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }}
+              className="text-slate-500 font-semibold tracking-wide mt-1 text-sm md:text-base uppercase"
+            >
+              Repositorio de Inteligencia y Auditorías
+            </motion.p>
           </div>
         </div>
-      </div>
 
-      <div className="flex-1 overflow-auto p-8">
-        <div className="max-w-7xl mx-auto">
-          {loading ? (
-            <div className="flex flex-col items-center justify-center h-64 gap-4">
-              <Loader2 className="w-8 h-8 text-emerald-500 animate-spin" />
-              <p className="text-gray-500 font-medium">Cargando historial de base de datos...</p>
+        {/* Buscador Interactivo (Cápsula Flotante) */}
+        <motion.div 
+          initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.6 }}
+          className="relative w-full xl:w-[450px] group shrink-0"
+        >
+          <div className="absolute inset-0 bg-emerald-400/10 rounded-2xl blur-xl group-hover:bg-emerald-400/20 transition-all duration-500" />
+          <div className="relative">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-6 h-6 text-emerald-600/70" />
+            <input 
+              type="text" 
+              placeholder="Indagar por folio, nombre o archivo..." 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-14 pr-6 py-4 bg-white/80 backdrop-blur-3xl border border-white/60 rounded-2xl focus:outline-none focus:ring-4 focus:ring-emerald-500/20 focus:border-emerald-400 transition-all text-base md:text-lg font-bold text-slate-800 placeholder:font-normal placeholder:text-slate-400 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.05)]"
+            />
+          </div>
+        </motion.div>
+      </header>
+
+      {/* Grid de Consultas */}
+      <div className="flex-1 w-full px-6 lg:px-10 pb-10 z-10">
+        {loading ? (
+          <div className="flex flex-col items-center justify-center h-[50vh] gap-6">
+            <div className="relative">
+              <div className="absolute inset-0 bg-emerald-400 blur-xl opacity-20 animate-pulse rounded-full" />
+              <Loader2 className="w-16 h-16 text-emerald-500 animate-spin relative z-10" />
             </div>
-          ) : filteredHistory.length === 0 ? (
-            <div className="bg-white rounded-2xl border border-dashed border-gray-300 p-12 text-center flex flex-col items-center justify-center">
-              <div className="bg-gray-50 p-4 rounded-full mb-4">
-                <FileArchive className="w-10 h-10 text-gray-400" />
-              </div>
-              <h3 className="text-xl font-bold text-gray-800 mb-2">No se encontraron consultas</h3>
-              <p className="text-gray-500 max-w-md">
-                {searchTerm ? 'Ningún análisis coincide con tu búsqueda. Intenta con otros términos.' : 'Aún no has realizado ninguna auditoría masiva en el sistema.'}
-              </p>
+            <p className="text-slate-500 font-bold text-lg animate-pulse tracking-wide uppercase">Cargando Bóveda Central...</p>
+          </div>
+        ) : filteredHistory.length === 0 ? (
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
+            className="w-full max-w-2xl mx-auto bg-white/50 backdrop-blur-xl rounded-[3rem] border-2 border-dashed border-slate-300 p-16 text-center flex flex-col items-center justify-center mt-10 shadow-sm"
+          >
+            <div className="bg-slate-100 p-6 rounded-full mb-6 shadow-inner">
+              <FileArchive className="w-16 h-16 text-slate-400" />
             </div>
-          ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+            <h3 className="text-3xl font-extrabold text-slate-800 mb-4 tracking-tight">Registro Vacío</h3>
+            <p className="text-slate-500 text-lg font-medium leading-relaxed">
+              {searchTerm 
+                ? 'El motor de búsqueda no encontró coincidencias en la telemetría actual. Intenta con otros parámetros.' 
+                : 'La bóveda forense está esperando tu primer análisis de inteligencia.'}
+            </p>
+          </motion.div>
+        ) : (
+          <>
+            <motion.div 
+              variants={containerVariants}
+              initial="hidden"
+              animate="show"
+              className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-8"
+            >
               {filteredHistory.map((record) => (
-                <div 
+                <motion.div 
+                  variants={itemVariants}
                   key={record.id} 
-                  className="bg-white border border-gray-200 rounded-2xl shadow-sm hover:shadow-md hover:border-emerald-200 transition-all duration-200 flex flex-col overflow-hidden group"
+                  className="bg-white/70 backdrop-blur-3xl border border-white shadow-[0_15px_30px_-10px_rgba(0,0,0,0.05)] hover:shadow-[0_30px_60px_-15px_rgba(5,150,105,0.15)] rounded-[2rem] transition-all duration-300 flex flex-col overflow-hidden group hover:-translate-y-2 relative"
                 >
-                  <div className="p-6 border-b border-gray-100 flex-1">
-                    <div className="flex justify-between items-start mb-4">
-                      <div className="flex-1 min-w-0 pr-4">
-                        <h3 className="font-bold text-lg text-gray-900 truncate" title={record.nombre_analisis}>
+                  <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-slate-200 to-slate-200 group-hover:from-emerald-400 group-hover:to-teal-400 transition-all duration-500" />
+                  
+                  <div className="p-8 border-b border-white/50 flex-1 relative z-10">
+                    <div className="flex justify-between items-start mb-6 gap-4">
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-extrabold text-xl text-slate-800 truncate tracking-tight mb-1" title={record.nombre_analisis}>
                           {record.nombre_analisis || "Sin título"}
                         </h3>
-                        <p className="text-xs text-gray-500 mt-1 truncate flex items-center gap-1.5" title={record.archivo_origen}>
-                          <FileText className="w-3.5 h-3.5" />
+                        <p className="text-sm font-semibold text-slate-500 truncate flex items-center gap-2" title={record.archivo_origen}>
+                          <FileText className="w-4 h-4 text-emerald-500" />
                           {record.archivo_origen}
                         </p>
                       </div>
@@ -206,139 +289,157 @@ export default function HistoryPage() {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-y-4 gap-x-2 mt-6">
+                    <div className="grid grid-cols-2 gap-y-6 gap-x-4 mt-8 bg-slate-50/50 rounded-2xl p-4 border border-white shadow-inner">
                       <div>
-                        <p className="text-xs text-gray-500 font-medium uppercase tracking-wider mb-1 flex items-center gap-1"><Calendar className="w-3.5 h-3.5"/> Fecha</p>
-                        <p className="text-sm font-semibold text-gray-800">
+                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1.5 flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5"/> Fecha</p>
+                        <p className="text-sm font-extrabold text-slate-700">
                           {record.hora_inicio ? new Date(record.hora_inicio).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' }) : '--'}
                         </p>
                       </div>
                       <div>
-                        <p className="text-xs text-gray-500 font-medium uppercase tracking-wider mb-1 flex items-center gap-1"><Clock className="w-3.5 h-3.5"/> Hora</p>
-                        <p className="text-sm font-semibold text-gray-800">
+                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1.5 flex items-center gap-1.5"><Clock className="w-3.5 h-3.5"/> Hora</p>
+                        <p className="text-sm font-extrabold text-slate-700">
                           {record.hora_inicio ? new Date(record.hora_inicio).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '--'}
                         </p>
                       </div>
-                      <div>
-                        <p className="text-xs text-gray-500 font-medium uppercase tracking-wider mb-1 flex items-center gap-1"><Key className="w-3.5 h-3.5"/> Llaves</p>
-                        <p className="text-sm font-semibold text-emerald-700 bg-emerald-50 w-max px-2 py-0.5 rounded">
-                          {record.cantidad_llaves} extraídas
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-500 font-medium uppercase tracking-wider mb-1 flex items-center gap-1"><Play className="w-3.5 h-3.5"/> Duración</p>
-                        <p className="text-sm font-semibold text-gray-800">
-                          {formatDuration(record.tiempo_respuesta)}
-                        </p>
+                      <div className="col-span-2 border-t border-slate-200/60 pt-4 mt-1 grid grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1.5 flex items-center gap-1.5"><Key className="w-3.5 h-3.5"/> Contratos</p>
+                          <p className="text-sm font-black text-emerald-600 bg-emerald-50 border border-emerald-100 w-max px-3 py-1 rounded-lg shadow-sm">
+                            {record.cantidad_llaves} indexados
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1.5 flex items-center gap-1.5"><Play className="w-3.5 h-3.5"/> Tiempo IA</p>
+                          <p className="text-sm font-extrabold text-slate-700 mt-1">
+                            {formatDuration(record.tiempo_respuesta)}
+                          </p>
+                        </div>
                       </div>
                     </div>
                   </div>
                   
-                  <div className="bg-gray-50/50 p-4 flex gap-2">
+                  <div className="bg-white/80 p-5 flex gap-3 relative z-10 backdrop-blur-md">
                     <button
                       onClick={() => handleOpenFolder(record.id)}
-                      title="Abrir carpeta local"
-                      className="p-2.5 bg-white border border-gray-200 hover:border-gray-300 hover:bg-gray-100 text-gray-600 rounded-xl shadow-sm transition-all flex items-center justify-center shrink-0"
+                      title="Explorar Físico"
+                      className="w-12 h-12 bg-slate-50 border border-slate-200 hover:border-emerald-300 hover:bg-emerald-50 text-slate-600 hover:text-emerald-600 rounded-2xl shadow-sm transition-all flex items-center justify-center shrink-0"
                     >
                       <FileArchive className="w-5 h-5" />
                     </button>
                     <button
                       onClick={() => {
                         setJobToDuplicate(record.id);
-                        setNewJobName(`${record.nombre_analisis || "Análisis"} (Copia)`);
+                        setNewJobName(`${record.nombre_analisis || "Análisis"} (V2)`);
                         setDuplicateModalOpen(true);
                       }}
-                      title="Duplicar análisis"
-                      className="p-2.5 bg-white border border-gray-200 hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-600 text-gray-600 rounded-xl shadow-sm transition-all flex items-center justify-center shrink-0"
+                      title="Clonar Inteligencia"
+                      className="w-12 h-12 bg-slate-50 border border-slate-200 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-600 text-slate-600 rounded-2xl shadow-sm transition-all flex items-center justify-center shrink-0"
                     >
                       <Copy className="w-5 h-5" />
                     </button>
                     <button
                       onClick={() => router.push(`/results?jobId=${record.id}`)}
-                      className="flex-1 py-2.5 px-4 bg-white border border-gray-200 hover:border-emerald-500 hover:bg-emerald-50 hover:text-emerald-700 text-gray-700 font-semibold rounded-xl shadow-sm transition-all flex items-center justify-center gap-2 group-hover:bg-emerald-600 group-hover:text-white group-hover:border-emerald-600"
+                      className="flex-1 h-12 bg-slate-900 border border-transparent hover:bg-emerald-600 text-white font-bold rounded-2xl shadow-md transition-all flex items-center justify-center gap-2 group-hover:shadow-emerald-500/25 active:scale-[0.98]"
                     >
-                      Ir a la Consulta
-                      <ChevronRight className="w-4 h-4" />
+                      Ingresar
+                      <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                     </button>
                   </div>
-                </div>
+                </motion.div>
               ))}
-            </div>
-          )}
-          
-          {history.length > 0 && history.length < total && !searchTerm && (
-            <div className="mt-10 flex justify-center pb-8">
-              <button 
-                onClick={loadMore}
-                disabled={loadingMore}
-                className="px-6 py-2.5 bg-white border border-gray-200 text-gray-700 font-medium rounded-full shadow-sm hover:bg-gray-50 hover:border-gray-300 transition-all flex items-center gap-2 disabled:opacity-50"
-              >
-                {loadingMore ? (
-                  <><Loader2 className="w-4 h-4 animate-spin" /> Cargando más...</>
-                ) : (
-                  'Mostrar más consultas'
-                )}
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-      
-      {/* Modal de Duplicación */}
-      {duplicateModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden border border-gray-200">
-            <div className="p-6 border-b border-gray-100">
-              <h2 className="text-xl font-bold text-gray-900">Duplicar Análisis</h2>
-              <p className="text-sm text-gray-500 mt-1">
-                Se creará una copia exacta independiente en la base de datos y se clonará la carpeta física de descargas.
-              </p>
-            </div>
-            
-            <form onSubmit={handleDuplicate} className="p-6">
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Nuevo nombre del análisis
-                </label>
-                <input
-                  type="text"
-                  required
-                  autoFocus
-                  value={newJobName}
-                  onChange={(e) => setNewJobName(e.target.value)}
-                  placeholder="Ej: Auditoría Modificada"
-                  className="w-full px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all text-gray-900 font-medium"
-                />
-              </div>
-              
-              <div className="flex gap-3 justify-end mt-8">
-                <button
-                  type="button"
-                  onClick={() => setDuplicateModalOpen(false)}
-                  disabled={duplicating}
-                  className="px-4 py-2 text-gray-600 font-medium hover:bg-gray-100 rounded-xl transition-all"
+            </motion.div>
+
+            {history.length > 0 && history.length < total && !searchTerm && (
+              <div className="mt-16 flex justify-center pb-12 z-10 relative">
+                <button 
+                  onClick={loadMore}
+                  disabled={loadingMore}
+                  className="px-8 py-4 bg-white/80 backdrop-blur-xl border border-white text-slate-800 font-bold rounded-full shadow-[0_10px_40px_-10px_rgba(0,0,0,0.1)] hover:shadow-[0_10px_40px_-10px_rgba(5,150,105,0.2)] hover:border-emerald-200 transition-all flex items-center gap-3 disabled:opacity-50 active:scale-95"
                 >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={duplicating || !newJobName.trim()}
-                  className="px-6 py-2 bg-emerald-600 text-white font-medium hover:bg-emerald-700 rounded-xl shadow-sm transition-all flex items-center gap-2 disabled:opacity-50"
-                >
-                  {duplicating ? (
-                    <><Loader2 className="w-4 h-4 animate-spin" /> Duplicando...</>
+                  {loadingMore ? (
+                    <><Loader2 className="w-5 h-5 animate-spin text-emerald-500" /> Extrayendo más telemetría...</>
                   ) : (
                     <>
-                      <Copy className="w-4 h-4" />
-                      Crear Duplicado
+                      <Server className="w-5 h-5 text-emerald-500" />
+                      Cargar Archivos Antiguos
                     </>
                   )}
                 </button>
               </div>
-            </form>
-          </div>
-        </div>
-      )}
+            )}
+          </>
+        )}
+      </div>
+      
+      {/* Modal Glassmorphism de Duplicación */}
+      <AnimatePresence>
+        {duplicateModalOpen && (
+          <motion.div 
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md"
+          >
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.9, opacity: 0, y: 20 }} transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              className="bg-white/90 backdrop-blur-3xl rounded-[2.5rem] shadow-2xl w-full max-w-lg overflow-hidden border border-white"
+            >
+              <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-blue-400 via-emerald-400 to-teal-500" />
+
+              <div className="p-10 border-b border-slate-100">
+                <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mb-6 shadow-inner border border-blue-100">
+                  <Copy className="w-8 h-8" />
+                </div>
+                <h2 className="text-3xl font-black text-slate-800 tracking-tight">Clonar Bóveda</h2>
+                <p className="text-base text-slate-500 mt-3 font-medium leading-relaxed">
+                  Se creará un clon forense exacto (SnapShot) en la base de datos y se independizará la carpeta física de descargas de anexos.
+                </p>
+              </div>
+              
+              <form onSubmit={handleDuplicate} className="p-10 bg-slate-50/50">
+                <div className="mb-8">
+                  <label className="block text-sm font-bold text-slate-700 mb-3 uppercase tracking-wider">
+                    Asignación de Nueva Identidad
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    autoFocus
+                    value={newJobName}
+                    onChange={(e) => setNewJobName(e.target.value)}
+                    placeholder="Ej: Auditoría Revisión Final"
+                    className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-500/20 focus:border-blue-400 transition-all text-slate-900 font-bold shadow-sm"
+                  />
+                </div>
+                
+                <div className="flex gap-4 justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setDuplicateModalOpen(false)}
+                    disabled={duplicating}
+                    className="px-6 py-3.5 text-slate-600 font-bold hover:bg-slate-200 rounded-xl transition-all"
+                  >
+                    Abortar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={duplicating || !newJobName.trim()}
+                    className="px-8 py-3.5 bg-gradient-to-r from-slate-900 to-slate-800 text-white font-bold hover:from-black hover:to-slate-900 rounded-xl shadow-xl shadow-slate-900/20 transition-all flex items-center gap-3 disabled:opacity-50 active:scale-95"
+                  >
+                    {duplicating ? (
+                      <><Loader2 className="w-5 h-5 animate-spin" /> Procesando Clon...</>
+                    ) : (
+                      <>
+                        <Database className="w-5 h-5 text-emerald-400" />
+                        Ejecutar Clonado
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
       
     </div>
   );

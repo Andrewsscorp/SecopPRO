@@ -25,6 +25,8 @@ export default function UploadZone() {
     nombre: '',
     documento: '',
     ciudad: '',
+    palabra_clave: '',
+    codigo_unspsc: '',
     fechaInicio: '',
     fechaFin: ''
   });
@@ -90,9 +92,9 @@ export default function UploadZone() {
 
   const handleDirectSearch = async (e: React.FormEvent) => {
     e.preventDefault();
-    const { nombre, documento, ciudad, fechaInicio, fechaFin } = searchParams;
+    const { nombre, documento, ciudad, palabra_clave, codigo_unspsc, fechaInicio, fechaFin } = searchParams;
     
-    if (!nombre && !documento && !ciudad && !(fechaInicio && fechaFin)) {
+    if (!nombre && !documento && !ciudad && !palabra_clave && !codigo_unspsc && !(fechaInicio && fechaFin)) {
       toast.error('Por favor, ingresa al menos un criterio de búsqueda.');
       return;
     }
@@ -103,17 +105,19 @@ export default function UploadZone() {
     }
 
     setIsSearching(true);
-    const toastId = toast.loading('Consultando la API oficial de SECOP II...');
+    const toastId = toast.loading('Consultando la API oficial de SECOP I y II...');
 
     try {
       const query = new URLSearchParams();
       if (nombre) query.append('nombre', nombre);
       if (documento) query.append('documento', documento);
       if (ciudad) query.append('ciudad', ciudad);
+      if (palabra_clave) query.append('palabra_clave', palabra_clave);
+      if (codigo_unspsc) query.append('codigo_unspsc', codigo_unspsc);
       if (fechaInicio) query.append('fecha_inicio', fechaInicio);
       if (fechaFin) query.append('fecha_fin', fechaFin);
 
-      const res = await fetch(`http://localhost:8000/api/search/direct?${query.toString()}`);
+      const res = await fetch(`http://127.0.0.1:8000/api/search/direct?${query.toString()}`);
       
       if (!res.ok) {
         const errorData = await res.json();
@@ -127,8 +131,12 @@ export default function UploadZone() {
       if (data.count === 0) {
         setShowNoResultsModal(true);
       } else {
-        toast.success(`Se encontraron ${data.count} contratos. Cargando Dashboard...`);
-        router.push(`/results?jobId=${data.job_id}`);
+        toast.success(`Búsqueda iniciada. Redirigiendo al Dashboard...`);
+        const queryParams = new URLSearchParams();
+        queryParams.append('jobId', data.job_id);
+        if (data.is_background) queryParams.append('is_background', 'true');
+        
+        router.push(`/results?${queryParams.toString()}`);
       }
     } catch (error: any) {
       toast.dismiss(toastId);
@@ -405,6 +413,29 @@ export default function UploadZone() {
                           </label>
                           <input 
                             type="text" placeholder="Ej. Antioquia, Bogotá" value={searchParams.ciudad} onChange={e => setSearchParams({...searchParams, ciudad: e.target.value})}
+                            className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none transition-all text-slate-800 font-semibold placeholder:font-normal placeholder:text-slate-400 shadow-sm"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold text-slate-600 uppercase tracking-wider flex items-center gap-2">
+                            <FileText className="w-4 h-4 text-emerald-500" />
+                            Palabra Clave / Objeto
+                          </label>
+                          <input 
+                            type="text" placeholder="Ej. malla vial, puente..." value={searchParams.palabra_clave} onChange={e => setSearchParams({...searchParams, palabra_clave: e.target.value})}
+                            className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none transition-all text-slate-800 font-semibold placeholder:font-normal placeholder:text-slate-400 shadow-sm"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold text-slate-600 uppercase tracking-wider flex items-center gap-2">
+                            <Database className="w-4 h-4 text-emerald-500" />
+                            Código UNSPSC
+                          </label>
+                          <input 
+                            type="text" placeholder="Ej. 80110000" value={searchParams.codigo_unspsc} onChange={e => setSearchParams({...searchParams, codigo_unspsc: e.target.value})}
                             className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none transition-all text-slate-800 font-semibold placeholder:font-normal placeholder:text-slate-400 shadow-sm"
                           />
                         </div>

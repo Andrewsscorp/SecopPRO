@@ -68,35 +68,67 @@ export default function GlobalChat() {
   useEffect(() => {
     const fetchKeys = async () => {
       try {
-        const res = await fetch('http://localhost:8000/api/settings/keys');
-        const data = await res.json();
-        if (data.status === 'success' && data.data) {
-          const providers = [];
-          if (data.data.groq?.is_active) providers.push({ id: 'groq', name: 'Groq (Llama 3)' });
-          if (data.data.gemini?.is_active) providers.push({ id: 'gemini', name: 'Google Gemini' });
-          
-          setActiveProviders(providers);
-          
-          const savedProvider = localStorage.getItem('secop_chat_provider');
-          if (savedProvider && providers.find(p => p.id === savedProvider)) {
-            setSelectedProvider(savedProvider);
-          } else if (providers.length > 0) {
-            setSelectedProvider(providers[0].id);
+        const [keysRes, qwenRes] = await Promise.all([
+          fetch('http://127.0.0.1:8000/api/settings/keys').catch(() => null),
+          fetch('http://127.0.0.1:8000/api/settings/qwen-status').catch(() => null)
+        ]);
+        
+        const providers = [];
+        
+        if (keysRes && keysRes.ok) {
+          const data = await keysRes.json();
+          if (data.status === 'success' && data.data) {
+            if (data.data.groq?.is_active) providers.push({ id: 'groq', name: 'Groq' });
+            if (data.data.gemini?.is_active) providers.push({ id: 'gemini', name: 'Gemini' });
           }
         }
+        
+        if (qwenRes && qwenRes.ok) {
+          const qwenData = await qwenRes.json();
+          if (qwenData.status === 'success' && qwenData.is_downloaded) {
+            providers.push({ id: 'qwen', name: 'Local (Qwen)' });
+          }
+        }
+        
+        setActiveProviders(providers);
+        
+        const savedProvider = localStorage.getItem('secop_chat_provider');
+        const globalMode = localStorage.getItem('global_ai_mode');
+        
+        if (globalMode === 'local' && providers.find(p => p.id === 'qwen')) {
+          setSelectedProvider('qwen');
+        } else if (globalMode === 'api' && savedProvider && savedProvider !== 'qwen' && providers.find(p => p.id === savedProvider)) {
+          setSelectedProvider(savedProvider);
+        } else if (savedProvider && providers.find(p => p.id === savedProvider)) {
+          setSelectedProvider(savedProvider);
+        } else if (providers.length > 0) {
+          setSelectedProvider(providers[0].id);
+        }
       } catch (err) {
-        console.error('API Keys fetch error, ignoring:', err);
+        console.error('API fetch error, ignoring:', err);
       }
     };
     
     if (isChatOpen) {
       fetchKeys();
     }
+
+    const handleStorage = () => {
+      if (isChatOpen) fetchKeys();
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
   }, [isChatOpen]);
 
   const handleProviderSelect = (id: string) => {
     setSelectedProvider(id);
     localStorage.setItem('secop_chat_provider', id);
+    if (id === 'qwen') {
+      localStorage.setItem('global_ai_mode', 'local');
+    } else {
+      localStorage.setItem('global_ai_mode', 'api');
+    }
+    window.dispatchEvent(new Event('storage'));
   };
 
   const handleSendChat = async () => {
@@ -112,7 +144,7 @@ export default function GlobalChat() {
     setChatLoading(true);
     
     try {
-      const res = await fetch('http://localhost:8000/api/ai/chat', {
+      const res = await fetch('http://127.0.0.1:8000/api/ai/chat', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({ message: userMessage, provider: selectedProvider })
@@ -170,21 +202,21 @@ export default function GlobalChat() {
             </div>
             
             {/* Animated Switch (Segmented Control) Premium */}
-            <div className="flex items-center justify-between mt-1 z-20">
-              <span className="flex items-center gap-1.5 font-medium tracking-wide text-[13px] text-emerald-100/90">
-                <Bot className="w-4 h-4 text-emerald-200"/> IA Activa:
+            <div className="flex flex-col gap-2 mt-1 z-20">
+              <span className="flex items-center gap-1.5 font-medium tracking-wide text-[12px] text-emerald-100/90">
+                <Bot className="w-3.5 h-3.5 text-emerald-200"/> IA Activa:
               </span>
               
-              <div className="relative flex items-center bg-black/20 backdrop-blur-md p-1 rounded-xl shadow-inner border border-white/10 w-fit">
+              <div className="relative flex items-center bg-black/20 backdrop-blur-md p-1 rounded-xl shadow-inner border border-white/10 w-full">
                 {activeProviders.length === 0 ? (
-                  <span className="px-4 py-1.5 text-[12px] text-gray-400">Sin conexión</span>
+                  <span className="px-4 py-1.5 text-[12px] text-gray-400 text-center w-full">Sin conexión</span>
                 ) : (
                   <>
                     {activeProviders.map((p) => (
                       <button 
                         key={p.id}
                         onClick={() => handleProviderSelect(p.id)}
-                        className={`relative z-10 px-3.5 py-1.5 text-[13px] font-bold rounded-lg transition-colors duration-300 w-[125px] text-center ${selectedProvider === p.id ? 'text-white drop-shadow-md' : 'text-emerald-100/70 hover:text-white'}`}
+                        className={`relative z-10 flex-1 py-1.5 text-[12.5px] font-bold rounded-lg transition-colors duration-300 text-center ${selectedProvider === p.id ? 'text-white drop-shadow-md' : 'text-emerald-100/70 hover:text-white'}`}
                       >
                         {p.name}
                       </button>

@@ -47,6 +47,15 @@ def check_cache(job_id: str):
     finally:
         db.close()
 
+@router.get("/contracts-count/{job_id}")
+def get_contracts_count(job_id: str):
+    db = SessionLocal()
+    try:
+        count = db.query(ContratoAnalisis).filter(ContratoAnalisis.id_analisis == job_id).count()
+        return {"count": count}
+    finally:
+        db.close()
+
 @router.get("/contractors/{job_id}")
 def get_job_contractors(job_id: str):
     db = SessionLocal()

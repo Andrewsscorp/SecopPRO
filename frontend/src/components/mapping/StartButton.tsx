@@ -30,7 +30,7 @@ export default function StartButton({ onStartAnalysis }: StartButtonProps) {
     
     // Obtener el siguiente número consecutivo
     try {
-      const res = await fetch('http://localhost:8000/api/next-audit-name');
+      const res = await fetch('http://127.0.0.1:8000/api/next-audit-name');
       if (res.ok) {
          const data = await res.json();
          setAnalysisName(data.next_name);

@@ -339,6 +339,7 @@ NO uses emojis. NO devuelvas JSON. Redacta de forma profesional y corporativa.
 
 class PdfAiService:
     def __init__(self):
+        self.api_keys = []
         self.api_key = None
         self.model = "gemini-3.5-flash"
         self._load_config()
@@ -349,7 +350,9 @@ class PdfAiService:
         try:
             config = db.query(ConfiguracionAPI).filter(ConfiguracionAPI.proveedor == 'gemini').first()
             if config and config.api_key_encriptada:
-                self.api_key = decrypt_data(config.api_key_encriptada)
+                raw_keys_str = decrypt_data(config.api_key_encriptada)
+                self.api_keys = [k.strip() for k in raw_keys_str.split(",") if k.strip()]
+                self.api_key = self.api_keys[0] if self.api_keys else None
                 raw_model = config.modelo or "gemini-3.5-flash"
                 if raw_model == "gemini-flash-latest":
                     self.model = "gemini-3.5-flash"
@@ -370,19 +373,31 @@ class PdfAiService:
             
             result = []
             
+            # Función auxiliar para obtener el valor numérico (útil para ordenar)
+            def get_valor(cs):
+                val_str = str(cs.valor_del_contrato or "0").replace("$", "").replace("COP", "").strip()
+                if "," in val_str and "." in val_str:
+                    val_str = val_str.replace(".", "").replace(",", ".")
+                elif "," in val_str:
+                    val_str = val_str.replace(",", ".")
+                try:
+                    return float(val_str)
+                except:
+                    return 0.0
+
             # Si es básico, ordenamos por valor (mayor a menor) y tomamos solo los 20 más relevantes para ahorrar tokens y acelerar
             if profundidad == "basico":
-                def get_valor(cs):
-                    val_str = str(cs.valor_del_contrato or "0").replace("$", "").replace("COP", "").strip()
-                    if "," in val_str and "." in val_str:
-                        val_str = val_str.replace(".", "").replace(",", ".")
-                    elif "," in val_str:
-                        val_str = val_str.replace(",", ".")
-                    try:
-                        return float(val_str)
-                    except:
-                        return 0.0
                 contratos = sorted(contratos, key=lambda x: get_valor(x[1]), reverse=True)[:20]
+            else:
+                # Para profundidades mayores (medio/profundo), si hay demasiados contratos (>100), tomamos una muestra estadística
+                if len(contratos) > 100:
+                    import random
+                    contratos_sorted = sorted(contratos, key=lambda x: get_valor(x[1]), reverse=True)
+                    # Muestra estadística: 15 de mayor valor, y 85 seleccionados aleatoriamente del resto
+                    top_15 = contratos_sorted[:15]
+                    rest = contratos_sorted[15:]
+                    sample_85 = random.sample(rest, min(85, len(rest)))
+                    contratos = top_15 + sample_85
 
             for c, cs in contratos:
                 if profundidad == "basico":
@@ -552,7 +567,7 @@ class PdfAiService:
             db.close()
 
     def stream_generate_content(self, system_instruction: str, payload_text: str, max_retries: int = 3, profundidad: str = "medio") -> Generator[str, None, None]:
-        """Realiza la petición HTTP a Gemini usando streamGenerateContent (Server-Sent Events)."""
+        """Realiza la petición HTTP a Gemini usando streamGenerateContent (Server-Sent Events) con rotación de llaves API."""
         if not self.api_key:
             yield "data: " + json.dumps({"error": "La llave de Gemini no ha sido configurada."}) + "\n\n"
             return
@@ -562,7 +577,6 @@ class PdfAiService:
         
         # Override model para básico (velocidad extrema)
         modelo_actual = "gemini-3.5-flash" if profundidad == "basico" else self.model
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{modelo_actual}:streamGenerateContent?key={self.api_key}&alt=sse"
         
         data = {
             "system_instruction": {
@@ -573,19 +587,32 @@ class PdfAiService:
             ]
         }
 
+        current_key_idx = 0
+        total_keys = len(self.api_keys) if self.api_keys else 1
+
         while attempt < max_retries:
             try:
+                current_api_key = self.api_keys[current_key_idx] if self.api_keys else self.api_key
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{modelo_actual}:streamGenerateContent?key={current_api_key}&alt=sse"
+                
                 # httpx stream para SSE
                 with httpx.Client(verify=False, timeout=300.0) as client:
                     with client.stream("POST", url, json=data) as response:
-                        if response.status_code == 429:
-                            wait_time = base_wait_time * (2 ** attempt)
-                            time.sleep(wait_time)
-                            attempt += 1
-                            continue
+                        if response.status_code in [429, 500, 502, 503, 504]:
+                            if response.status_code == 429 and total_keys > 1 and current_key_idx < total_keys - 1:
+                                current_key_idx += 1
+                                print(f"Gemini API rate limited (429). Rotando a la llave {current_key_idx + 1}/{total_keys}...")
+                                continue
+                            else:
+                                wait_time = base_wait_time * (2 ** attempt)
+                                print(f"Error {response.status_code} desde Gemini. Esperando {wait_time}s antes de reintentar...")
+                                time.sleep(wait_time)
+                                attempt += 1
+                                current_key_idx = 0
+                                continue
                             
                         if response.status_code != 200:
-                            yield "data: " + json.dumps({"error": f"Error HTTP {response.status_code} desde Gemini"}) + "\n\n"
+                            yield "data: " + json.dumps({"error": f"Error HTTP {response.status_code} desde Gemini al generar {section_id}"}) + "\n\n"
                             return
 
                         # Procesar flujo SSE de Gemini
