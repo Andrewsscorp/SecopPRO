@@ -96,6 +96,9 @@ interface PdfExporterState {
 
   selectedContractors: string[];
   setSelectedContractors: (nits: string[]) => void;
+
+  aiProvider: 'gemini' | 'groq' | 'local';
+  setAiProvider: (provider: 'gemini' | 'groq' | 'local') => void;
 }
 
 const getTodayDateStr = () => {
@@ -176,4 +179,7 @@ export const usePdfExporterStore = create<PdfExporterState>((set) => ({
 
   selectedContractors: [],
   setSelectedContractors: (selectedContractors) => set({ selectedContractors }),
+
+  aiProvider: 'gemini',
+  setAiProvider: (aiProvider) => set({ aiProvider }),
 }));

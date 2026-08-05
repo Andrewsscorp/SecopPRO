@@ -344,22 +344,39 @@ class PdfAiService:
         self.model = "gemini-3.5-flash"
         self._load_config()
 
-    def _load_config(self):
-        """Carga la llave de Gemini y el modelo desde la base de datos (UI)."""
+    def _load_config(self, provider: str = "gemini"):
+        """Carga la llave del proveedor y el modelo desde la base de datos (UI)."""
         db = SessionLocal()
         try:
-            config = db.query(ConfiguracionAPI).filter(ConfiguracionAPI.proveedor == 'gemini').first()
+            if provider == "local":
+                # Para local (qwen) no necesitamos config de DB necesariamente, pero limpiamos
+                self.api_keys = []
+                self.api_key = None
+                self.model = "qwen2.5-3b-local"
+                return
+
+            config = db.query(ConfiguracionAPI).filter(ConfiguracionAPI.proveedor == provider).first()
             if config and config.api_key_encriptada:
                 raw_keys_str = decrypt_data(config.api_key_encriptada)
                 self.api_keys = [k.strip() for k in raw_keys_str.split(",") if k.strip()]
                 self.api_key = self.api_keys[0] if self.api_keys else None
-                raw_model = config.modelo or "gemini-3.5-flash"
-                if raw_model == "gemini-flash-latest":
-                    self.model = "gemini-3.5-flash"
-                elif raw_model == "gemini-pro-latest":
-                    self.model = "gemini-3.1-pro-preview" # Fallback if pro is selected
+                
+                raw_model = config.modelo
+                # Mapeos legacy para Gemini si aplica
+                if provider == "gemini":
+                    raw_model = raw_model or "gemini-3.5-flash"
+                    if raw_model == "gemini-flash-latest":
+                        raw_model = "gemini-3.5-flash"
+                    elif raw_model == "gemini-pro-latest":
+                        raw_model = "gemini-3.1-pro-preview"
                 else:
-                    self.model = raw_model
+                    raw_model = raw_model or ("llama3-8b-8192" if provider == "groq" else "unknown")
+                    
+                self.model = raw_model
+            else:
+                self.api_keys = []
+                self.api_key = None
+                self.model = "gemini-3.5-flash" if provider == "gemini" else ("llama3-8b-8192" if provider == "groq" else "unknown")
         finally:
             db.close()
 
@@ -566,25 +583,113 @@ class PdfAiService:
         finally:
             db.close()
 
-    def stream_generate_content(self, system_instruction: str, payload_text: str, max_retries: int = 3, profundidad: str = "medio") -> Generator[str, None, None]:
-        """Realiza la petición HTTP a Gemini usando streamGenerateContent (Server-Sent Events) con rotación de llaves API."""
+    def stream_generate_content(self, system_instruction: str, payload_text: str, max_retries: int = 3, profundidad: str = "medio", provider: str = "gemini") -> Generator[str, None, None]:
+        """Realiza la petición HTTP a la IA configurada (Gemini, Groq, o Local) enviando texto en formato SSE."""
+        if provider == "local":
+            yield from self._generate_local(system_instruction, payload_text)
+        elif provider == "groq":
+            yield from self._generate_groq(system_instruction, payload_text, max_retries, profundidad)
+        else:
+            yield from self._generate_gemini(system_instruction, payload_text, max_retries, profundidad)
+
+    def _generate_local(self, system_instruction: str, payload_text: str) -> Generator[str, None, None]:
+        import os, subprocess, time
+        
+        models_dir = os.path.join("C:\\", "SecopPRO", "Models")
+        model_path = os.path.join(models_dir, "qwen2.5-3b-instruct-q4_k_m.gguf")
+        engine_path = os.path.join("C:\\", "SecopPRO", "Engine", "llama-cli.exe")
+        
+        if not os.path.exists(model_path) or not os.path.exists(engine_path):
+            yield "data: " + json.dumps({"error": "El modelo local o el motor no están instalados correctamente."}) + "\n\n"
+            return
+            
+        prompt_formatted = f"<|im_start|>system\n{system_instruction}<|im_end|>\n<|im_start|>user\n{payload_text}<|im_end|>\n<|im_start|>assistant\n"
+        prompt_file = os.path.join("C:\\", "SecopPRO", "Engine", "temp_pdf_prompt.txt")
+        with open(prompt_file, "w", encoding="utf-8") as f:
+            f.write(prompt_formatted)
+            
+        try:
+            result = subprocess.run([
+                engine_path,
+                "-m", model_path,
+                "-f", prompt_file,
+                "-n", "2048",
+                "--temp", "0.3",
+                "--top-p", "0.9",
+                "--threads", "8",
+                "--no-display-prompt",
+                "--log-disable"
+            ], capture_output=True, text=True, encoding="utf-8", timeout=120)
+            
+            response_text = result.stdout.strip()
+            if not response_text:
+                yield "data: " + json.dumps({"error": "La IA local no generó respuesta."}) + "\n\n"
+                return
+                
+            # Simular streaming para el frontend (5 caracteres por iteración, muy rápido)
+            chunk_size = 5
+            for i in range(0, len(response_text), chunk_size):
+                chunk = response_text[i:i+chunk_size]
+                yield "data: " + json.dumps({"chunk": chunk}) + "\n\n"
+                time.sleep(0.005)
+                
+            # Enviar uso de tokens ficticio para compatibilidad
+            yield "data: " + json.dumps({"usage": {"totalTokenCount": len(response_text) // 4}}) + "\n\n"
+            
+        except subprocess.TimeoutExpired:
+            yield "data: " + json.dumps({"error": "Tiempo de espera agotado en la IA Local."}) + "\n\n"
+        except Exception as e:
+            yield "data: " + json.dumps({"error": f"Error ejecutando modelo local: {str(e)}"}) + "\n\n"
+
+    def _generate_groq(self, system_instruction: str, payload_text: str, max_retries: int, profundidad: str) -> Generator[str, None, None]:
+        if not self.api_key:
+            yield "data: " + json.dumps({"error": "La llave de Groq no ha sido configurada."}) + "\n\n"
+            return
+            
+        from groq import Groq
+        import time
+        client = Groq(api_key=self.api_key, http_client=httpx.Client(verify=False))
+        modelo_actual = "llama3-8b-8192" if profundidad == "basico" else self.model
+        
+        attempt = 0
+        while attempt < max_retries:
+            try:
+                chat_completion = client.chat.completions.create(
+                    messages=[
+                        {"role": "system", "content": system_instruction},
+                        {"role": "user", "content": payload_text}
+                    ],
+                    model=modelo_actual,
+                    stream=True,
+                )
+                for chunk in chat_completion:
+                    content = chunk.choices[0].delta.content
+                    if content:
+                        yield "data: " + json.dumps({"chunk": content}) + "\n\n"
+                
+                # Para estimar tokens
+                yield "data: " + json.dumps({"usage": {"totalTokenCount": 0}}) + "\n\n"
+                return
+            except Exception as e:
+                attempt += 1
+                if attempt >= max_retries:
+                    yield "data: " + json.dumps({"error": f"Error de conexión con Groq: {str(e)}"}) + "\n\n"
+                    return
+                time.sleep(2 ** attempt)
+
+    def _generate_gemini(self, system_instruction: str, payload_text: str, max_retries: int, profundidad: str) -> Generator[str, None, None]:
         if not self.api_key:
             yield "data: " + json.dumps({"error": "La llave de Gemini no ha sido configurada."}) + "\n\n"
             return
 
+        import time
         attempt = 0
         base_wait_time = 15
-        
-        # Override model para básico (velocidad extrema)
         modelo_actual = "gemini-3.5-flash" if profundidad == "basico" else self.model
         
         data = {
-            "system_instruction": {
-                "parts": [{"text": system_instruction}]
-            },
-            "contents": [
-                {"parts": [{"text": payload_text}]}
-            ]
+            "system_instruction": {"parts": [{"text": system_instruction}]},
+            "contents": [{"parts": [{"text": payload_text}]}]
         }
 
         current_key_idx = 0
@@ -595,53 +700,45 @@ class PdfAiService:
                 current_api_key = self.api_keys[current_key_idx] if self.api_keys else self.api_key
                 url = f"https://generativelanguage.googleapis.com/v1beta/models/{modelo_actual}:streamGenerateContent?key={current_api_key}&alt=sse"
                 
-                # httpx stream para SSE
                 with httpx.Client(verify=False, timeout=300.0) as client:
                     with client.stream("POST", url, json=data) as response:
                         if response.status_code in [429, 500, 502, 503, 504]:
                             if response.status_code == 429 and total_keys > 1 and current_key_idx < total_keys - 1:
                                 current_key_idx += 1
-                                print(f"Gemini API rate limited (429). Rotando a la llave {current_key_idx + 1}/{total_keys}...")
                                 continue
                             else:
                                 wait_time = base_wait_time * (2 ** attempt)
-                                print(f"Error {response.status_code} desde Gemini. Esperando {wait_time}s antes de reintentar...")
                                 time.sleep(wait_time)
                                 attempt += 1
                                 current_key_idx = 0
                                 continue
                             
                         if response.status_code != 200:
-                            yield "data: " + json.dumps({"error": f"Error HTTP {response.status_code} desde Gemini al generar {section_id}"}) + "\n\n"
+                            yield "data: " + json.dumps({"error": f"Error HTTP {response.status_code} desde Gemini"}) + "\n\n"
                             return
 
-                        # Procesar flujo SSE de Gemini
                         for line in response.iter_lines():
                             if line.startswith("data: "):
                                 content = line[6:]
                                 if content == "[DONE]":
                                     continue
-                                
                                 try:
                                     chunk = json.loads(content)
-                                    # Extraer texto si hay
                                     parts = chunk.get("candidates", [{}])[0].get("content", {}).get("parts", [])
                                     if parts:
                                         text_chunk = parts[0].get("text", "")
                                         if text_chunk:
                                             yield "data: " + json.dumps({"chunk": text_chunk}) + "\n\n"
                                     
-                                    # Extraer tokens usados si viene
                                     usage = chunk.get("usageMetadata")
                                     if usage:
                                         yield "data: " + json.dumps({"usage": usage}) + "\n\n"
-                                        
                                 except json.JSONDecodeError:
                                     pass
-                        return # Flujo completado exitosamente
+                        return
                         
             except Exception as e:
                 yield "data: " + json.dumps({"error": f"Error de conexión: {str(e)}"}) + "\n\n"
                 return
                 
-        yield "data: " + json.dumps({"error": "Límite de peticiones excedido (Error 429). La cuota de tu API de Google Gemini (15 peticiones/min) se agotó. Por favor, espera 1 minuto e inténtalo de nuevo."}) + "\n\n"
+        yield "data: " + json.dumps({"error": "Límite de peticiones excedido (Error 429). Por favor, espera e inténtalo de nuevo."}) + "\n\n"

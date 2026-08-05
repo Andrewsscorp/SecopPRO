@@ -156,8 +156,12 @@ export const SectionsControl: React.FC<SectionsControlProps> = ({ jobId }) => {
 
       const endpoint = endpoints[sectionId];
       if (!endpoint) return;
-      
-      const payload: any = { job_id: jobId, profundidad, force_regenerate };
+      const payload: any = { 
+        job_id: jobId, 
+        profundidad, 
+        force_regenerate,
+        provider: usePdfExporterStore.getState().aiProvider 
+      };
       if (sectionId === 'adjudicatarios') {
         payload.selected_nits = usePdfExporterStore.getState().selectedContractors;
       }

@@ -25,6 +25,7 @@ class GenerateAiRequest(BaseModel):
     profundidad: str = "medio" # basico, medio, profundo
     force_regenerate: bool = False
     selected_nits: Optional[List[str]] = None
+    provider: str = "gemini"
 
 @router.get("/check-cache/{job_id}")
 def check_cache(job_id: str):
@@ -85,7 +86,7 @@ def get_job_contractors(job_id: str):
     finally:
         db.close()
 
-def stream_and_cache(job_id: str, field: str, instruction: str, profundidad: str = "medio", payload_getter=None, force_regenerate: bool = False):
+def stream_and_cache(job_id: str, field: str, instruction: str, profundidad: str = "medio", payload_getter=None, force_regenerate: bool = False, provider: str = "gemini"):
     db = SessionLocal()
     
     # 1. Check Cache
@@ -110,7 +111,7 @@ def stream_and_cache(job_id: str, field: str, instruction: str, profundidad: str
             # Auditar sobreescritura
             auditoria = AuditoriaSistema(
                 accion="Sobreescritura de PDF AI",
-                detalles={"campo_sobreescrito": field, "nivel_profundidad": profundidad, "job_id": job_id}
+                detalles={"campo_sobreescrito": field, "nivel_profundidad": profundidad, "job_id": job_id, "proveedor": provider}
             )
             db.add(auditoria)
             db.commit()
@@ -119,7 +120,7 @@ def stream_and_cache(job_id: str, field: str, instruction: str, profundidad: str
 
     # 2. Not in Cache, Generate
     try:
-        pdf_ai_service._load_config()
+        pdf_ai_service._load_config(provider)
         if payload_getter:
             payload = payload_getter(job_id)
         else:
@@ -139,7 +140,7 @@ def stream_and_cache(job_id: str, field: str, instruction: str, profundidad: str
         full_content = ""
         total_tokens = 0
         
-        for sse_chunk in pdf_ai_service.stream_generate_content(final_instruction, payload, profundidad=profundidad):
+        for sse_chunk in pdf_ai_service.stream_generate_content(final_instruction, payload, profundidad=profundidad, provider=provider):
             yield sse_chunk
             
             # Acumular el texto para guardar en cache
@@ -177,7 +178,7 @@ def stream_and_cache(job_id: str, field: str, instruction: str, profundidad: str
 def generate_cover(req: GenerateAiRequest):
     instruction = get_cover_instruction(req.profundidad)
     return StreamingResponse(
-        stream_and_cache(req.job_id, "portada", instruction, req.profundidad, pdf_ai_service.get_cover_payload, req.force_regenerate),
+        stream_and_cache(req.job_id, "portada", instruction, req.profundidad, pdf_ai_service.get_cover_payload, req.force_regenerate, req.provider),
         media_type="text/event-stream"
     )
 
@@ -185,7 +186,7 @@ def generate_cover(req: GenerateAiRequest):
 def generate_executive_summary(req: GenerateAiRequest):
     instruction = get_executive_summary_instruction(req.profundidad)
     return StreamingResponse(
-        stream_and_cache(req.job_id, "resumen", instruction, req.profundidad, None, req.force_regenerate),
+        stream_and_cache(req.job_id, "resumen", instruction, req.profundidad, None, req.force_regenerate, req.provider),
         media_type="text/event-stream"
     )
 
@@ -193,7 +194,7 @@ def generate_executive_summary(req: GenerateAiRequest):
 def generate_results(req: GenerateAiRequest):
     instruction = get_results_instruction(req.profundidad)
     return StreamingResponse(
-        stream_and_cache(req.job_id, "resultados", instruction, req.profundidad, None, req.force_regenerate),
+        stream_and_cache(req.job_id, "resultados", instruction, req.profundidad, None, req.force_regenerate, req.provider),
         media_type="text/event-stream"
     )
 
@@ -203,7 +204,7 @@ def generate_comparisons(req: GenerateAiRequest):
     payload = pdf_ai_service.get_contracts_payload(req.job_id, req.profundidad)
     final_instruction = get_comparisons_instruction(payload, req.profundidad)
     return StreamingResponse(
-        stream_and_cache(req.job_id, "comparaciones", final_instruction, req.profundidad, None, req.force_regenerate),
+        stream_and_cache(req.job_id, "comparaciones", final_instruction, req.profundidad, None, req.force_regenerate, req.provider),
         media_type="text/event-stream"
     )
 
@@ -211,7 +212,7 @@ def generate_comparisons(req: GenerateAiRequest):
 def generate_graphics(req: GenerateAiRequest):
     instruction = get_graphics_instruction(req.profundidad)
     return StreamingResponse(
-        stream_and_cache(req.job_id, "graficos", instruction, req.profundidad, None, req.force_regenerate),
+        stream_and_cache(req.job_id, "graficos", instruction, req.profundidad, None, req.force_regenerate, req.provider),
         media_type="text/event-stream"
     )
 
@@ -220,7 +221,7 @@ def generate_contractors(req: GenerateAiRequest):
     instruction = get_contractors_instruction(req.profundidad)
     payload_getter = lambda jid: pdf_ai_service.get_contractors_payload(jid, selected_nits=req.selected_nits)
     return StreamingResponse(
-        stream_and_cache(req.job_id, "adjudicatarios", instruction, req.profundidad, payload_getter, req.force_regenerate),
+        stream_and_cache(req.job_id, "adjudicatarios", instruction, req.profundidad, payload_getter, req.force_regenerate, req.provider),
         media_type="text/event-stream"
     )
 
@@ -228,7 +229,7 @@ def generate_contractors(req: GenerateAiRequest):
 def generate_conclusions(req: GenerateAiRequest):
     instruction = get_conclusions_instruction(req.profundidad)
     return StreamingResponse(
-        stream_and_cache(req.job_id, "conclusiones", instruction, req.profundidad, pdf_ai_service.get_conclusions_payload, req.force_regenerate),
+        stream_and_cache(req.job_id, "conclusiones", instruction, req.profundidad, pdf_ai_service.get_conclusions_payload, req.force_regenerate, req.provider),
         media_type="text/event-stream"
     )
 
@@ -237,7 +238,7 @@ def generate_anexos(req: GenerateAiRequest):
     from services.pdf_ai_service import get_anexos_instruction, get_anexos_payload
     instruction = get_anexos_instruction(req.profundidad)
     return StreamingResponse(
-        stream_and_cache(req.job_id, "anexos", instruction, req.profundidad, get_anexos_payload, req.force_regenerate),
+        stream_and_cache(req.job_id, "anexos", instruction, req.profundidad, get_anexos_payload, req.force_regenerate, req.provider),
         media_type="text/event-stream"
     )
 

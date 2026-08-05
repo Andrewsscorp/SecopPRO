@@ -13,7 +13,7 @@ interface PdfExporterModalProps {
 }
 
 export const PdfExporterModal: React.FC<PdfExporterModalProps> = ({ jobId }) => {
-  const { isOpen, setIsOpen, orientation } = usePdfExporterStore();
+  const { isOpen, setIsOpen, orientation, aiProvider, setAiProvider } = usePdfExporterStore();
   
   const isLandscape = orientation === 'Horizontal';
 
@@ -51,14 +51,47 @@ export const PdfExporterModal: React.FC<PdfExporterModalProps> = ({ jobId }) => 
               <p className="text-xs text-slate-500">Personaliza el contenido y diseño de tu reporte PDF</p>
             </div>
           </div>
-          
-          <button 
-            onClick={() => setIsOpen(false)}
-            className="p-2 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
+          <div className="flex items-center gap-2">
+            <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200">
+              <button
+                onClick={() => setAiProvider('gemini')}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                  aiProvider === 'gemini' 
+                    ? 'bg-white text-blue-600 shadow-sm border border-slate-200/50' 
+                    : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
+                }`}
+              >
+                Gemini
+              </button>
+              <button
+                onClick={() => setAiProvider('groq')}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                  aiProvider === 'groq' 
+                    ? 'bg-white text-emerald-600 shadow-sm border border-slate-200/50' 
+                    : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
+                }`}
+              >
+                Groq
+              </button>
+              <button
+                onClick={() => setAiProvider('local')}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                  aiProvider === 'local' 
+                    ? 'bg-white text-purple-600 shadow-sm border border-slate-200/50' 
+                    : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
+                }`}
+              >
+                Local
+              </button>
+            </div>
+            
+            <button 
+              onClick={() => setIsOpen(false)}
+              className="p-2 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors ml-2"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
 
         {/* Cuerpo Dividido en 2 Columnas */}
         <div className="flex flex-1 overflow-hidden">
